@@ -18,7 +18,14 @@ export async function POST(request: NextRequest) {
   }
   const model = process.env.CLOUDFLARE_AI_MODEL || "@cf/openai/whisper-large-v3-turbo";
   // Bias recognition toward the app's primary language (Arabic).
-  const language = process.env.CLOUDFLARE_AI_LANGUAGE || "ar";
+  // Only trust ISO-639-1-ish codes — anything else (e.g. "arabic", "ar-YE-dj")
+  // makes Whisper ignore the hint and fall back to English.
+  const rawLanguage = process.env.CLOUDFLARE_AI_LANGUAGE || "ar";
+  const language = /^[a-z]{2,3}$/i.test(rawLanguage.trim()) ? rawLanguage.trim().toLowerCase() : "ar";
+  const initialPrompt =
+    process.env.CLOUDFLARE_AI_INITIAL_PROMPT ||
+    "تسجيل صوتي لحسابات محل بقالة في اليمن: فاتورة بيع، فاتورة شراء، دفعة، سلفة، سكر، أرز بشاور، دقيق، زيت، شاي أحمر، حبوب، لبنة، عسل، بيض، كيلو، نص كيلو، ربع، غرام، لتر، علبة، كرتونة، ريال، ألف ريال";
+  console.log(`[ai/transcribe] model=${model} language=${language}`);
 
   const form = await request.formData();
   const audio = form.get("audio");
@@ -55,6 +62,7 @@ export async function POST(request: NextRequest) {
               audio: buffer.toString("base64"),
               task: "transcribe",
               language,
+              initial_prompt: initialPrompt,
             }),
             signal: AbortSignal.timeout(60_000),
           }

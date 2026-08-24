@@ -77,7 +77,11 @@ export function PdfActions({
         toast.info("تم تنزيل الملف — أرسله عبر واتساب");
       }
     } catch (e) {
-      if ((e as Error)?.name !== "AbortError") toast.error(labels.shareFailed);
+      const err = e as Error;
+      if (err?.name !== "AbortError") {
+        console.error("[pdf] build failed:", err);
+        toast.error(`${labels.shareFailed}${err?.message ? ` (${err.message})` : ""}`);
+      }
     } finally {
       setBusy(false);
     }
@@ -88,7 +92,8 @@ export function PdfActions({
     setBusy(true);
     try {
       triggerDownload(await buildPdfBlob());
-    } catch {
+    } catch (e) {
+      console.error("[pdf] build failed:", e);
       toast.error(labels.shareFailed);
     } finally {
       setBusy(false);

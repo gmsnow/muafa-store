@@ -113,8 +113,28 @@ export async function scanCandidates(): Promise<NotificationCandidate[]> {
   return out;
 }
 
+/**
+ * The (app) layout calls this on every navigation; the condition scan is ~7
+ * queries. A short in-process TTL collapses rapid sidebar navigation into a
+ * single scan. markAllRead() invalidates so the bell updates immediately.
+ */
+const SYNC_TTL_MS = 20_000;
+type SyncedNotifications = Awaited<ReturnType<typeof listNotifications>>;
+let syncCache: { at: number; promise: Promise<SyncedNotifications> } | null = null;
+
+export function syncNotifications(limit = 25): Promise<SyncedNotifications> {
+  const cached = syncCache;
+  if (cached && Date.now() - cached.at < SYNC_TTL_MS) return cached.promise;
+  const promise: Promise<SyncedNotifications> = doSyncNotifications(limit).catch((err) => {
+    if (syncCache?.promise === promise) syncCache = null;
+    throw err;
+  });
+  syncCache = { at: Date.now(), promise };
+  return promise;
+}
+
 /** Upsert unread notifications for current conditions; returns fresh list. */
-export async function syncNotifications(limit = 25) {
+async function doSyncNotifications(limit = 25) {
   const candidates = await scanCandidates();
   if (candidates.length > 0) {
     const existing = await db.notification.findMany({
@@ -144,6 +164,7 @@ export async function listNotifications(limit = 25) {
 }
 
 export async function markAllRead() {
+  syncCache = null; // next sync must reflect the fresh read state
   await db.notification.updateMany({ where: { isRead: false }, data: { isRead: true } });
 }
 

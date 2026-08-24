@@ -364,6 +364,8 @@ model Product {
   @@index([categoryId])
   @@index([brandId])
   @@index([isActive])
+  // Serves the hot catalog pattern: WHERE deletedAt IS NULL ORDER BY createdAt DESC
+  @@index([deletedAt, createdAt(sort: Desc)])
   @@map("products")
 }
 
@@ -397,7 +399,8 @@ model ProductBatch {
 
   @@unique([productId, batchNo])
   @@index([expiryDate])
-  @@index([productId])
+  // FEFO consumption: WHERE productId = ? AND quantity > 0 ORDER BY expiryDate, createdAt
+  @@index([productId, expiryDate, createdAt])
   @@map("product_batches")
 }
 
@@ -700,6 +703,8 @@ model CustomerTransaction {
 
   @@index([customerId, createdAt])
   @@index([type])
+  // Month-filtered listings query by createdAt without a customerId prefix.
+  @@index([createdAt])
   @@map("customer_transactions")
 }
 
@@ -753,11 +758,10 @@ model Sale {
   payments SalePayment[]
   returns  SaleReturn[]
 
-  @@index([invoiceNumber])
   @@index([saleDate])
-  @@index([cashierId])
+  @@index([status, saleDate])
+  @@index([cashierId, saleDate])
   @@index([customerId])
-  @@index([status])
   @@map("sales")
 }
 
@@ -969,7 +973,7 @@ model Notification {
   isRead     Boolean          @default(false)
   createdAt  DateTime         @default(now())
 
-  @@index([isRead, createdAt])
+  @@index([isRead, createdAt(sort: Desc)])
   @@index([type])
   @@map("notifications")
 }

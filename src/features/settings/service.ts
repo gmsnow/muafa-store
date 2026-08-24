@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
 import {
@@ -6,21 +7,31 @@ import {
   localizationSettingsSchema, securitySettingsSchema,
 } from "./schema";
 
-export async function getStoreSettings() {
-  return db.storeSettings.upsert({
-    where: { id: "store" },
-    update: {},
-    create: { id: "store", name: "Grocery Store" },
-  });
-}
+/**
+ * Cached per request: the (app) layout, settings pages and services all need
+ * these singletons, so React cache() collapses them to one SELECT per request.
+ * Read-first instead of upsert-on-read: reads no longer take a row write-lock.
+ */
+export const getStoreSettings = cache(async () => {
+  const row = await db.storeSettings.findUnique({ where: { id: "store" } });
+  if (row) return row;
+  try {
+    return await db.storeSettings.create({ data: { id: "store", name: "Grocery Store" } });
+  } catch {
+    // Lost a cold-start race to create the singleton — read the winner's row.
+    return db.storeSettings.findUniqueOrThrow({ where: { id: "store" } });
+  }
+});
 
-export async function getSystemSettings() {
-  return db.systemSettings.upsert({
-    where: { id: "system" },
-    update: {},
-    create: { id: "system" },
-  });
-}
+export const getSystemSettings = cache(async () => {
+  const row = await db.systemSettings.findUnique({ where: { id: "system" } });
+  if (row) return row;
+  try {
+    return await db.systemSettings.create({ data: { id: "system" } });
+  } catch {
+    return db.systemSettings.findUniqueOrThrow({ where: { id: "system" } });
+  }
+});
 
 async function auditSettings(userId: string, entity: string, changes: { section: string }) {
   const { recordAudit } = await import("@/shared/core/audit");

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { db } from "@/shared/db";
 import { getCurrentUser } from "@/features/auth/session";
 import { getT } from "@/shared/i18n";
+import { getStoreSettings } from "@/features/settings/service";
 import { Sidebar } from "@/features/shell/sidebar";
 import { Topbar } from "@/features/shell/topbar";
 import { syncNotifications } from "@/features/notifications/service";
@@ -13,13 +13,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/api/auth/expire?next=%2Flogin");
   if (user.mustChangePassword) redirect("/change-password");
 
+  // Independent reads run concurrently — this is the hottest path in the app.
   const { t } = await getT();
-  const store = await db.storeSettings.findUnique({ where: { id: "store" } });
-  const aiVoice = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
-  const notifications = (await syncNotifications()).map((n) => ({
+  const [store, notificationRows] = await Promise.all([
+    getStoreSettings(),
+    syncNotifications(),
+  ]);
+  const notifications = notificationRows.map((n) => ({
     id: n.id, type: n.type, body: n.body ?? "", isRead: n.isRead,
     createdAt: n.createdAt.toISOString(),
   }));
+  const aiVoice = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
 
   return (
     <div className="flex min-h-screen">

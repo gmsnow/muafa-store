@@ -10,8 +10,10 @@ export default async function ReceivingPage({
   const sp = await searchParams;
   const poId = firstParam(sp.po);
 
-  const { rows: suppliers } = await listSuppliers({ pageSize: 500 });
-  const po = poId ? await getPoDetail(poId) : null;
+  const [{ rows: suppliers }, po] = await Promise.all([
+    listSuppliers({ pageSize: 500 }),
+    poId ? getPoDetail(poId) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="space-y-4">

@@ -31,7 +31,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "decimal.js": "^10.6.0",
-    "exceljs": "^4.4.0",
     "html2canvas-pro": "^2.3.9",
     "jose": "^6.2.10",
     "jspdf": "^4.2.1",

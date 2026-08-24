@@ -1,6 +1,7 @@
 ﻿import { notFound } from "next/navigation";
 import { db } from "@/shared/db";
 import { getT } from "@/shared/i18n";
+import { getStoreSettings } from "@/features/settings/service";
 import { formatDateTime, formatMoney } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import { PrintTrigger } from "./print-trigger";
@@ -11,19 +12,22 @@ export default async function ReceiptPage({ params }: PageProps<"/sales/receipt/
   const { t, locale } = await getT();
   const { id } = await params;
 
-  const sale = await db.sale.findUnique({
-    where: { id },
-    include: {
-      customer: { select: { code: true, name: true, nameAr: true } },
-      cashier: { select: { fullName: true, username: true } },
-      items: { orderBy: { id: "asc" } },
-      payments: true,
-    },
-  });
+  const [sale, store] = await Promise.all([
+    db.sale.findUnique({
+      where: { id },
+      include: {
+        customer: { select: { code: true, name: true, nameAr: true } },
+        cashier: { select: { fullName: true, username: true } },
+        items: { orderBy: { id: "asc" } },
+        payments: true,
+      },
+    }),
+    // Cached getter shared with the (app) layout — one read per request.
+    getStoreSettings(),
+  ]);
   if (!sale) notFound();
 
-  const store = await db.storeSettings.findUnique({ where: { id: "store" } });
-  const storeName = store?.nameAr ?? store?.name ?? t.auth.storeName;
+  const storeName = store.nameAr ?? store.name ?? t.auth.storeName;
 
   return (
     <div className="min-h-screen space-y-3 bg-background py-4 print:min-h-0 print:bg-transparent print:py-0">

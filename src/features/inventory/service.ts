@@ -8,7 +8,7 @@ import {
   productSchema, importRowSchema, adjustmentSchema,
   type ProductQuery,
 } from "./schema";
-import type { Prisma, MovementType } from "@/generated/prisma/client";
+import { Prisma, type MovementType } from "@/generated/prisma/client";
 import type { ProductBatch } from "@/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -579,26 +579,30 @@ export interface LowStockItem {
 }
 
 export async function listLowStock(limit?: number): Promise<LowStockItem[]> {
-  const products = await db.product.findMany({
-    where: { deletedAt: null, isActive: true },
-    select: {
-      id: true, sku: true, name: true, nameAr: true, minStock: true, reorderLevel: true,
-      inventory: { select: { quantity: true } },
-    },
-  });
-  const items = products
-    .map((p) => ({
-      productId: p.id,
-      sku: p.sku,
-      name: p.name,
-      nameAr: p.nameAr,
-      quantity: D(p.inventory?.quantity).toNumber(),
-      minStock: D(p.minStock).toNumber(),
-      reorderLevel: D(p.reorderLevel).toNumber(),
-    }))
-    .filter((p) => p.quantity <= Math.max(p.minStock, p.reorderLevel))
-    .sort((a, b) => a.quantity - b.quantity);
-  return limit ? items.slice(0, limit) : items;
+  // Filter/sort in SQL — was a full-catalog fetch filtered and sorted in JS.
+  const statement = Prisma.sql`
+    SELECT p.id, p.sku, p.name, p."nameAr" AS "nameAr",
+           p."minStock" AS "minStock", p."reorderLevel" AS "reorderLevel",
+           i.quantity AS quantity
+    FROM products p
+    LEFT JOIN inventory i ON i."productId" = p.id
+    WHERE p."deletedAt" IS NULL AND p."isActive" = true
+      AND COALESCE(i.quantity, 0) <= GREATEST(p."minStock", p."reorderLevel")
+    ORDER BY COALESCE(i.quantity, 0) ASC
+    ${limit ? Prisma.sql`LIMIT ${limit}` : Prisma.empty}`;
+  const rows = await db.$queryRaw<
+    { id: string; sku: string; name: string; nameAr: string | null;
+      minStock: string; reorderLevel: string; quantity: string | null }[]
+  >(statement);
+  return rows.map((p) => ({
+    productId: p.id,
+    sku: p.sku,
+    name: p.name,
+    nameAr: p.nameAr,
+    quantity: D(p.quantity ?? 0).toNumber(),
+    minStock: D(p.minStock).toNumber(),
+    reorderLevel: D(p.reorderLevel).toNumber(),
+  }));
 }
 
 export interface ExpiringBatchItem {
@@ -619,7 +623,8 @@ export async function listExpiringBatches(withinDays?: number, limit?: number): 
   const batches = await db.productBatch.findMany({
     where: { expiryDate: { lte: to }, quantity: { gt: 0 }, product: { deletedAt: null, isActive: true } },
     orderBy: { expiryDate: "asc" },
-    take: limit ? limit + 20 : undefined,
+    // Hard safety ceiling so an unbounded caller can't scan the whole table.
+    take: limit ? limit + 20 : 500,
     include: { product: { select: { sku: true, name: true, nameAr: true } } },
   });
   const items = batches.map((b) => mapBatch(b));

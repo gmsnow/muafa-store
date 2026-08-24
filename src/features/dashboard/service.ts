@@ -26,7 +26,7 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
   const yesterday = new Date(today.getTime() - 86400000);
   const activeSales: SaleStatus[] = [SaleStatus.COMPLETED, SaleStatus.PARTIALLY_REFUNDED];
 
-  const [todayAgg, yesterdayAgg, purchasesAgg, ordersCount, productsCount, customersCount, invRows] =
+  const [todayAgg, yesterdayAgg, purchasesAgg, ordersCount, productsCount, customersCount, stockCounts] =
     await Promise.all([
       db.sale.aggregate({
         _sum: { total: true, refundedAmount: true, costTotal: true },
@@ -40,23 +40,21 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
       db.sale.count({ where: { saleDate: { gte: today } } }),
       db.product.count({ where: { deletedAt: null } }),
       db.customer.count({ where: { deletedAt: null } }),
-      db.inventory.findMany({
-        select: { quantity: true, product: { select: { minStock: true } } },
-      }),
+      // Counted in SQL — pulling every inventory row into JS scaled O(catalog).
+      db.$queryRaw<{ low_stock: string; out_of_stock: string }[]>`
+        SELECT COUNT(*) FILTER (WHERE i.quantity <= 0) AS out_of_stock,
+               COUNT(*) FILTER (WHERE i.quantity > 0 AND i.quantity <= p."minStock") AS low_stock
+        FROM inventory i
+        JOIN products p ON p.id = i."productId"
+        WHERE p."deletedAt" IS NULL`,
     ]);
 
   const netToday = D(todayAgg._sum?.total).minus(D(todayAgg._sum?.refundedAmount)).toNumber();
   const netYesterday = D(yesterdayAgg._sum?.total).minus(D(yesterdayAgg._sum?.refundedAmount)).toNumber();
   const cogsToday = D(todayAgg._sum?.costTotal).toNumber();
 
-  let lowStock = 0;
-  let outOfStock = 0;
-  for (const row of invRows) {
-    const q = D(row.quantity).toNumber();
-    const min = D(row.product.minStock).toNumber();
-    if (q <= 0) outOfStock++;
-    else if (q <= min) lowStock++;
-  }
+  const lowStock = Number(stockCounts[0]?.low_stock ?? 0);
+  const outOfStock = Number(stockCounts[0]?.out_of_stock ?? 0);
 
   return {
     todaySales: money(netToday).toNumber(),
@@ -147,8 +145,10 @@ export async function getSalesByCategory(days = 30): Promise<CategorySlice[]> {
     select: { id: true, category: { select: { name: true, nameAr: true } } },
   });
   const catMap = new Map<string, { name: string; nameAr: string | null; value: number }>();
+  // O(1) lookups instead of products.find() inside the loop (was O(n·m)).
+  const productMap = new Map(products.map((p) => [p.id, p]));
   for (const r of rows) {
-    const p = products.find((x) => x.id === r.productId);
+    const p = productMap.get(r.productId);
     if (!p) continue;
     const key = p.category.name;
     const entry = catMap.get(key) ?? { name: p.category.name, nameAr: p.category.nameAr, value: 0 };

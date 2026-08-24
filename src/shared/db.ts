@@ -8,7 +8,12 @@ function createClient(): PrismaClient {
   if (!url) throw new Error("DATABASE_URL is not set");
   // pg does not understand Prisma's ?schema= convention — strip it and pass explicitly.
   const pgUrl = url.replace(/\?schema=[^&]*$/, "");
-  const adapter = new PrismaPg(pgUrl, { schema: "public" });
+  // Small per-instance pool: on serverless every lambda opens its own pool and
+  // Supabase's session-mode pooler only allows ~15 concurrent sessions.
+  const adapter = new PrismaPg(
+    { connectionString: pgUrl, max: 4, idleTimeoutMillis: 15_000, connectionTimeoutMillis: 10_000 },
+    { schema: "public" },
+  );
   return new PrismaClient({ adapter, log: ["warn", "error"] });
 }
 

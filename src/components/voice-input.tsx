@@ -53,7 +53,11 @@ function useVoiceInsert() {
     }
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Mono + browser DSP (echo cancel / noise suppress / AGC) gives the
+      // recogniser a much cleaner signal than the default capture.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
     } catch {
       toast.error("اسمح بالوصول إلى الميكروفون من إعدادات المتصفح");
       return;
@@ -74,6 +78,7 @@ function useVoiceInsert() {
         const res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
         const data = (await res.json().catch(() => null)) as { text?: string; error?: string } | null;
         if (res.ok && data?.text) insertAtCursor(el, data.text);
+        else if (data?.error === "NO_ARABIC_SPEECH") toast.error("لم يتم التعرف على كلام عربي — تحدّث بالعربية وحاول مجددًا");
         else if (res.ok) toast.error("لم يتم التعرف على أي كلام — حاول مجددًا");
         else toast.error(data?.error === "AI_NOT_CONFIGURED" ? "خدمة الصوت غير مهيأة بعد" : "فشل تحويل الصوت إلى نص");
       } catch {

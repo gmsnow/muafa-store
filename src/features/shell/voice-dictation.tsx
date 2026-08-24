@@ -113,7 +113,11 @@ export function VoiceDictation({ aiMode = false }: { aiMode?: boolean }) {
     }
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Mono + browser DSP (echo cancel / noise suppress / AGC) gives the
+      // recogniser a much cleaner signal than the default capture.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
     } catch {
       toast.error("تم رفض الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح");
       return;
@@ -136,6 +140,7 @@ export function VoiceDictation({ aiMode = false }: { aiMode?: boolean }) {
         const res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
         const data = (await res.json().catch(() => null)) as { text?: string; error?: string } | null;
         if (res.ok && data?.text) applyToTarget(data.text);
+        else if (data?.error === "NO_ARABIC_SPEECH") toast.error("لم يتم التعرف على كلام عربي — تحدّث بالعربية وحاول مجددًا");
         else if (data?.error === "AI_NOT_CONFIGURED") toast.error("خدمة الذكاء الاصطناعي غير مهيأة بعد");
         else if (res.ok) toast.error("لم يتم التعرف على أي كلام — حاول مجددًا");
         else toast.error("فشل تحويل الصوت إلى نص — حاول مجددًا");
@@ -151,14 +156,18 @@ export function VoiceDictation({ aiMode = false }: { aiMode?: boolean }) {
   }
 
   // ---------- Web Speech fallback ----------
-  function startWebSpeech() {
+  // Arabic-only: try Yemeni Arabic first, fall back to standard Saudi Arabic
+  // if the engine reports the locale as unsupported.
+  const AR_LOCALES = ["ar-YE", "ar-SA"];
+
+  function startWebSpeech(localeIndex = 0) {
     const Ctor = getRecognitionCtor();
     if (!Ctor) {
       toast.error("المتصفح لا يدعم الإدخال الصوتي — استخدم Chrome أو Safari الحديث");
       return;
     }
     const rec = new Ctor();
-    rec.lang = "ar-SA";
+    rec.lang = AR_LOCALES[localeIndex] ?? "ar";
     rec.continuous = true;
     rec.interimResults = true;
 
@@ -181,6 +190,15 @@ export function VoiceDictation({ aiMode = false }: { aiMode?: boolean }) {
     };
     rec.onerror = (e: Event) => {
       const err = e as unknown as { error?: string };
+      if (
+        (err.error === "language-not-supported" || err.error === "language-unavailable") &&
+        localeIndex < AR_LOCALES.length - 1
+      ) {
+        wantListenRef.current = false;
+        try { rec.abort(); } catch { /* noop */ }
+        startWebSpeech(localeIndex + 1);
+        return;
+      }
       if (err.error === "not-allowed" || err.error === "service-not-allowed") {
         wantListenRef.current = false;
         setListening(false);

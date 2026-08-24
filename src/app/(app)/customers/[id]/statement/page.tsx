@@ -7,16 +7,26 @@ import { formatDateTime, formatMoney } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import { getStatement } from "@/features/customers/service";
 import { getStoreSettings } from "@/features/settings/service";
+import { firstParam } from "@/components/pagination";
 import type { CustomerTransactionType } from "@/generated/prisma/client";
 import { PdfActions } from "@/components/pdf-actions";
 
 export default async function CustomerStatementPage({
   params,
+  searchParams,
 }: PageProps<"/customers/[id]/statement">) {
   const { t, locale } = await getT();
   const { id } = await params;
+  const sp = await searchParams;
+  const parseDate = (v?: string) => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  };
+  const from = parseDate(firstParam(sp.from));
+  const to = parseDate(firstParam(sp.to));
   const [{ customer, txns }, store] = await Promise.all([
-    getStatement(id),
+    getStatement(id, { from, to }),
     getStoreSettings(),
   ]);
 
@@ -61,8 +71,14 @@ export default async function CustomerStatementPage({
             {t.customers.statementTitle} — {customer.nameAr || customer.name}
           </h1>
         </div>
-        <PdfActions
+          {(from || to) && (
+            <Button size="sm" variant="outline" asChild>
+              <Link href={`/customers/${id}/statement`}>{t.customers.fullStatement}</Link>
+            </Button>
+          )}
+          <PdfActions
           fileName={`statement-${customer.code}`}
+          targetId="stmt-paper"
           labels={{
             sharePdf: t.common.sharePdf,
             generatingPdf: t.common.generatingPdf,
@@ -100,6 +116,12 @@ export default async function CustomerStatementPage({
             <div style={{ fontSize: 12, color: "#555555", marginTop: 6 }}>
               {t.customers.printedAt}: {formatDateTime(new Date(), locale)}
             </div>
+            {(from || to) && (
+              <div style={{ fontSize: 12, color: "#555555", marginTop: 2 }}>
+                {t.customers.period}: {from ? formatDateTime(from, locale) : "…"} {t.customers.asOf}{" "}
+                {to ? formatDateTime(to, locale) : "…"}
+              </div>
+            )}
           </div>
         </div>
 

@@ -316,15 +316,22 @@ export async function getCustomerById(id: string) {
 }
 
 /** Full ledger for one customer, oldest first (statement view). */
-export async function getStatement(customerId: string) {
+export async function getStatement(
+  customerId: string,
+  opts?: { from?: Date; to?: Date },
+) {
   const customer = await db.customer.findFirst({
     where: { id: customerId, deletedAt: null },
     include: { group: { select: { name: true, discountRate: true } } },
   });
   if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
+  const createdAt = {
+    ...(opts?.from ? { gte: opts.from } : {}),
+    ...(opts?.to ? { lte: opts.to } : {}),
+  };
   const [txns, loyalty] = await Promise.all([
     db.customerTransaction.findMany({
-      where: { customerId },
+      where: { customerId, ...(createdAt.gte || createdAt.lte ? { createdAt } : {}) },
       orderBy: { createdAt: "asc" },
       take: 500,
     }),

@@ -29,6 +29,8 @@ export interface SalesSummary {
   grossSales: number;
   returnsTotal: number;
   netSales: number;
+  netSalesExTax: number;
+  outputTax: number;
   discounts: number;
   cogs: number;
   avgTicket: number;
@@ -38,7 +40,7 @@ export async function salesSummary(range: ReportRange): Promise<SalesSummary> {
   const [agg, returnsAgg] = await Promise.all([
     db.sale.aggregate({
       _sum: {
-        total: true, costTotal: true,
+        total: true, costTotal: true, taxTotal: true,
         itemDiscountTotal: true, invoiceDiscount: true,
       },
       _count: true,
@@ -54,11 +56,14 @@ export async function salesSummary(range: ReportRange): Promise<SalesSummary> {
   const netCogs = Math.max(0, n2(agg._sum?.costTotal) - n2(returnsAgg._sum?.costTotal));
   const invoices = agg._count ?? 0;
   const netSales = money(gross - returnsTotal).toNumber();
+  const outputTax = n2(agg._sum?.taxTotal);
   return {
     invoices,
     grossSales: gross,
     returnsTotal,
     netSales,
+    netSalesExTax: money(netSales - outputTax).toNumber(),
+    outputTax,
     discounts: money(n2(agg._sum?.itemDiscountTotal) + n2(agg._sum?.invoiceDiscount)).toNumber(),
     cogs: netCogs,
     avgTicket: invoices > 0 ? money(netSales / invoices).toNumber() : 0,
@@ -148,13 +153,14 @@ export interface PurchasesSummary {
   discounts: number;
   paid: number;
   due: number;
+  inputTax: number;
   returnsTotal: number;
 }
 
 export async function purchasesReport(range: ReportRange) {
   const [agg, retAgg, buckets, bySupplier] = await Promise.all([
     db.purchase.aggregate({
-      _sum: { total: true, discountTotal: true, paidAmount: true, dueAmount: true },
+      _sum: { total: true, discountTotal: true, paidAmount: true, dueAmount: true, taxTotal: true },
       _count: true,
       where: { date: { gte: range.from, lt: range.to } },
     }),
@@ -181,6 +187,7 @@ export async function purchasesReport(range: ReportRange) {
     discounts: n2(agg._sum?.discountTotal),
     paid: n2(agg._sum?.paidAmount),
     due: n2(agg._sum?.dueAmount),
+    inputTax: n2(agg._sum?.taxTotal),
     returnsTotal: n2(retAgg._sum?.total),
   };
   return {
@@ -198,6 +205,7 @@ export async function purchasesReport(range: ReportRange) {
 
 export interface ProfitReport {
   netSales: number;
+  netSalesExTax: number;
   cogs: number;
   grossProfit: number;
   expenses: number;
@@ -209,7 +217,7 @@ export interface ProfitReport {
 export async function profitReport(range: ReportRange): Promise<ProfitReport> {
   const [salesAgg, retAgg, expAgg, monthly] = await Promise.all([
     db.sale.aggregate({
-      _sum: { total: true, costTotal: true },
+      _sum: { total: true, costTotal: true, taxTotal: true },
       where: { saleDate: { gte: range.from, lt: range.to }, status: { in: [...ACTIVE_SALES] } },
     }),
     db.saleReturn.aggregate({
@@ -220,7 +228,7 @@ export async function profitReport(range: ReportRange): Promise<ProfitReport> {
       _sum: { amount: true },
       where: { expenseDate: { gte: range.from, lt: range.to } },
     }),
-    db.$queryRaw<{ bucket: Date; sales: string; cogs: string; returns: string; ret_cogs: string; expenses: string }[]>`
+    db.$queryRaw<{ bucket: Date; sales: string; cogs: string; returns: string; ret_cogs: string; tax: string; expenses: string }[]>`
       WITH m AS (SELECT date_trunc('month', d) AS bucket FROM generate_series(${range.from}::timestamp, ${range.to}::timestamp, '1 month') d)
       SELECT m.bucket,
         COALESCE((SELECT SUM(s."total") FROM sales s
@@ -231,6 +239,8 @@ export async function profitReport(range: ReportRange): Promise<ProfitReport> {
           WHERE date_trunc('month', sr."returnDate") = m.bucket), 0)::text AS returns,
         COALESCE((SELECT SUM(sr."costTotal") FROM sale_returns sr
           WHERE date_trunc('month', sr."returnDate") = m.bucket), 0)::text AS ret_cogs,
+        COALESCE((SELECT SUM(s."taxTotal") FROM sales s
+          WHERE date_trunc('month', s."saleDate") = m.bucket AND s.status IN ('COMPLETED','PARTIALLY_REFUNDED')), 0)::text AS tax,
         COALESCE((SELECT SUM(e."amount") FROM expenses e
           WHERE date_trunc('month', e."expenseDate") = m.bucket), 0)::text AS expenses
       FROM m ORDER BY m.bucket ASC`,
@@ -239,18 +249,21 @@ export async function profitReport(range: ReportRange): Promise<ProfitReport> {
   const returnsTotal = n2(retAgg._sum?.total);
   const netCogs = Math.max(0, n2(salesAgg._sum?.costTotal) - n2(retAgg._sum?.costTotal));
   const netSales = money(n2(salesAgg._sum?.total) - returnsTotal).toNumber();
-  const grossProfit = money(netSales - netCogs).toNumber();
+  const salesTax = n2(salesAgg._sum?.taxTotal);
+  const netSalesExTax = money(netSales - salesTax).toNumber();
+  const grossProfit = money(netSalesExTax - netCogs).toNumber();
   const expenses = n2(expAgg._sum?.amount);
 
   return {
     netSales,
+    netSalesExTax,
     cogs: netCogs,
     grossProfit,
     expenses,
     netProfit: money(grossProfit - expenses).toNumber(),
     marginPercent: netSales > 0 ? money((grossProfit / netSales) * 100).toNumber() : 0,
     monthly: monthly.map((m) => {
-      const sales = n2(m.sales) - n2(m.returns);
+      const sales = n2(m.sales) - n2(m.returns) - n2(m.tax);
       const cogs = Math.max(0, n2(m.cogs) - n2(m.ret_cogs));
       const gp = money(sales - cogs).toNumber();
       const ex = n2(m.expenses);
@@ -264,6 +277,52 @@ export async function profitReport(range: ReportRange): Promise<ProfitReport> {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// TAX REPORT (VAT position) - output (sales) vs input (purchases)
+// ---------------------------------------------------------------------------
+
+export interface TaxMonthRow {
+  month: string;
+  output: number;
+  input: number;
+  net: number;
+}
+
+export async function taxReport(range: ReportRange) {
+  const [outRows, inRows] = await Promise.all([
+    db.$queryRaw<{ bucket: Date; total: string }[]>`
+      SELECT date_trunc('month', s."saleDate") AS bucket, COALESCE(SUM(s."taxTotal"), 0) AS total
+      FROM sales s
+      WHERE s."saleDate" >= ${range.from} AND s."saleDate" < ${range.to}
+        AND s.status IN ('COMPLETED','PARTIALLY_REFUNDED')
+      GROUP BY bucket ORDER BY bucket ASC`,
+    db.$queryRaw<{ bucket: Date; total: string }[]>`
+      SELECT date_trunc('month', p."date") AS bucket, COALESCE(SUM(p."taxTotal"), 0) AS total
+      FROM purchases p
+      WHERE p."date" >= ${range.from} AND p."date" < ${range.to}
+      GROUP BY bucket ORDER BY bucket ASC`,
+  ]);
+  const byMonth = new Map<string, { output: number; input: number }>();
+  for (const r of outRows) {
+    const k = dayKey(new Date(r.bucket)).slice(0, 7);
+    const e = byMonth.get(k) ?? { output: 0, input: 0 };
+    e.output = n2(r.total);
+    byMonth.set(k, e);
+  }
+  for (const r of inRows) {
+    const k = dayKey(new Date(r.bucket)).slice(0, 7);
+    const e = byMonth.get(k) ?? { output: 0, input: 0 };
+    e.input = n2(r.total);
+    byMonth.set(k, e);
+  }
+  const monthly: TaxMonthRow[] = [...byMonth.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, v]) => ({ month, output: v.output, input: v.input, net: money(v.output - v.input).toNumber() }));
+  const outputTax = money(monthly.reduce((a, m) => a + m.output, 0)).toNumber();
+  const inputTax = money(monthly.reduce((a, m) => a + m.input, 0)).toNumber();
+  return { outputTax, inputTax, netPayable: money(outputTax - inputTax).toNumber(), monthly };
+}
 // ---------------------------------------------------------------------------
 // INVENTORY VALUATION REPORT
 // ---------------------------------------------------------------------------
@@ -477,17 +536,19 @@ export async function expensesReport(range: ReportRange) {
 // ---------------------------------------------------------------------------
 
 export async function financialSummary(range: ReportRange) {
-  const [profit, inventory, customers, suppliers] = await Promise.all([
+  const [profit, inventory, customers, suppliers, tax] = await Promise.all([
     profitReport(range),
     inventoryValuation(),
     customersReport(range),
     suppliersReport(range),
+    taxReport(range),
   ]);
   return {
     profit,
     inventoryTotals: inventory.totals,
     receivables: customers.totals.receivables,
     payables: suppliers.totals.payables,
+    tax,
   };
 }
 
@@ -567,6 +628,14 @@ export async function exportReportCsv(family: string, range: ReportRange): Promi
           items.map((i) => [i.code, i.name, i.docs, i.purchases, i.returnsTotal, i.netPurchases, i.balance])),
         "",
         toCsv(["payables", "purchaseVolume"], [[totals.payables, totals.purchaseVolume]]),
+      ].join("\n");
+    }
+    case "tax": {
+      const t = await taxReport(range);
+      return [
+        toCsv(["metric", "value"], [["outputTax", t.outputTax], ["inputTax", t.inputTax], ["netPayable", t.netPayable]]),
+        "",
+        toCsv(["month", "output", "input", "net"], t.monthly.map((m) => [m.month, m.output, m.input, m.net])),
       ].join("\n");
     }
     case "expenses": {

@@ -1,5 +1,4 @@
 import { Card, CardContent } from "@/components/ui/card";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { firstParam, Pagination, clampPage } from "@/components/pagination";
@@ -9,6 +8,7 @@ import { D } from "@/shared/core/money";
 import { listCustomers } from "@/features/customers/service";
 import { deleteCustomerAction } from "@/features/customers/actions";
 import { DeleteButton } from "@/features/inventory/ui/delete-button";
+import { StatementPeriodLink } from "./statement-period-link";
 import { CustomerLauncher } from "./customer-launcher";
 
 export default async function CustomersPage({
@@ -67,12 +67,17 @@ export default async function CustomersPage({
                   </TableCell>
                   <TableCell className="text-end">
                     <div className="flex items-center justify-end gap-1">
-                      <Link
-                        href={`/customers/${c.id}/statement`}
-                        className="rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        {t.customers.statement}
-                      </Link>
+                      <StatementPeriodLink
+                        customerId={c.id}
+                        labels={{
+                          trigger: t.customers.statement,
+                          title: t.customers.choosePeriod,
+                          day: t.customers.day,
+                          week: t.customers.week,
+                          month: t.customers.month,
+                          view: t.customers.view,
+                        }}
+                      />
                       <CustomerLauncher
                         mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
                         label={t.common.edit} editId={c.id}

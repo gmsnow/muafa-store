@@ -170,6 +170,8 @@ const ar = {
     month: "الشهر", deleteMonth: "حذف معاملات الشهر",
     deleteMonthConfirm: "سيتم حذف جميع معاملات الشهر المحدد نهائيًا وإعادة حساب أرصدة العملاء المتأثرة. لا يمكن التراجع.",
     monthDeleted: "تم حذف معاملات الشهر",
+    choosePeriod: "اختر فترة كشف الحساب", day: "يوم", week: "أسبوع",
+    view: "عرض", period: "الفترة", fullStatement: "كشف كامل",
   },
   notif: {
     lowStock: "مخزون منخفض", outOfStock: "نفاد المخزون",
@@ -183,6 +185,7 @@ const ar = {
     suppliersReport: "تقرير الموردين", expensesReport: "تقرير المصروفات",
     cashierReport: "تقرير الكاشير", productPerformance: "أداء المنتجات",
     financialSummary: "الملخص المالي",
+    taxReport: "التقرير الضريبي", outputTax: "ضريبة المخرجات", inputTax: "ضريبة المدخلات", netTaxPayable: "صافي الضريبة المستحقة",
     grossSales: "إجمالي المبيعات", netSales: "صافي المبيعات", returns: "المرتجعات",
     cogs: "تكلفة البضاعة المباعة", grossProfit: "الربح الإجمالي",
     operatingExpenses: "المصروفات التشغيلية", netProfit: "صافي الربح", margin: "هامش الربح",

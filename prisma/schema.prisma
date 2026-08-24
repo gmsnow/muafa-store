@@ -330,6 +330,7 @@ model Product {
   sellingPrice      Decimal   @db.Decimal(14, 2)
   wholesalePrice    Decimal?  @db.Decimal(14, 2)
   minPrice          Decimal?  @db.Decimal(14, 2)
+  taxRate           Decimal   @default(0) @db.Decimal(5, 2)
   imageUrl          String?
   minStock          Decimal   @default(0) @db.Decimal(14, 3)
   maxStock          Decimal?  @db.Decimal(14, 3)
@@ -532,6 +533,7 @@ model PurchaseOrderItem {
   receivedQty Decimal @default(0) @db.Decimal(14, 3)
   unitCost    Decimal @db.Decimal(14, 2)
   discount    Decimal @default(0) @db.Decimal(14, 2)
+  taxRate     Decimal @default(0) @db.Decimal(5, 2)
   lineTotal   Decimal @db.Decimal(14, 2)
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
@@ -551,6 +553,7 @@ model Purchase {
   date           DateTime @default(now())
   subtotal       Decimal  @db.Decimal(14, 2)
   discountTotal  Decimal  @default(0) @db.Decimal(14, 2)
+  taxTotal       Decimal  @default(0) @db.Decimal(14, 2)
   total          Decimal  @db.Decimal(14, 2)
   paidAmount     Decimal  @default(0) @db.Decimal(14, 2)
   dueAmount      Decimal  @default(0) @db.Decimal(14, 2)
@@ -580,6 +583,7 @@ model PurchaseItem {
   quantity    Decimal   @db.Decimal(14, 3)
   unitCost    Decimal   @db.Decimal(14, 2)
   discount    Decimal   @default(0) @db.Decimal(14, 2)
+  taxRate     Decimal   @default(0) @db.Decimal(5, 2)
   lineTotal   Decimal   @db.Decimal(14, 2)
 
   purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
@@ -730,6 +734,7 @@ model Sale {
   subtotal          Decimal    @db.Decimal(14, 2)
   itemDiscountTotal Decimal    @default(0) @db.Decimal(14, 2)
   invoiceDiscount   Decimal    @default(0) @db.Decimal(14, 2)
+  taxTotal          Decimal    @default(0) @db.Decimal(14, 2)
   total             Decimal    @db.Decimal(14, 2)
   costTotal         Decimal    @default(0) @db.Decimal(14, 2)
   paidTotal         Decimal    @default(0) @db.Decimal(14, 2)
@@ -768,6 +773,7 @@ model SaleItem {
   unitPrice   Decimal @db.Decimal(14, 2)
   discount    Decimal @default(0) @db.Decimal(14, 2)
   costPrice   Decimal @default(0) @db.Decimal(14, 2)
+  taxRate     Decimal @default(0) @db.Decimal(14, 2)
   lineTotal   Decimal @db.Decimal(14, 2)
 
   sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)

@@ -49,3 +49,6 @@ skills-lock.json
 
 # local backups produced by the app
 /backups/
+
+.vercel
+.env*

@@ -75,7 +75,7 @@ async function main() {
       name: "Al-Rahma Grocery", nameAr: "بقالة الرحمة",
       address: "Sana'a, Al-Hasabah St., Yemen", addressAr: "صنعاء - شارع الحصبة - اليمن",
       phone: "+967-771-234567", email: "info@alrahma-grocery.ye",
-      taxNumber: "TX-2026-004512", currencyCode: "YER", currencySymbol: "ر.ي",
+      currencyCode: "YER", currencySymbol: "ر.ي",
       receiptFooter: "Thank you for shopping with us!",
     },
   });

@@ -163,7 +163,7 @@ async function main() {
         name: d.name, nameAr: d.nameAr,
         categoryId: d.cat, brandId: d.brand ? brands[d.brand] : null, unitId: units["Piece"],
         costPrice: m2(d.cost), sellingPrice: m2(d.sell), wholesalePrice: m2(d.wsell),
-        minPrice: m2(Math.round(d.cost * 1.05)), taxRate: "0",
+        minPrice: m2(Math.round(d.cost * 1.05)),
         minStock: m3(d.minStock ?? int(6, 20)), reorderLevel: m3(d.reorder ?? int(18, 40)),
         maxStock: m3(int(150, 400)),
         trackExpiry: !!d.expiry, trackBatches: !!d.batches || !!d.expiry,
@@ -185,7 +185,7 @@ async function main() {
       data: {
         code, name, nameAr, company: `${name} Ltd.`,
         phone: `77${int(10000000, 99999999)}`, email: `sales@${code.toLowerCase()}.ye`,
-        address: "Sana'a Industrial Area", taxNumber: `TX-${int(100000, 999999)}`,
+        address: "Sana'a Industrial Area",
         creditLimit: m2(int(500000, 3000000)), paymentTerms: pick(["Net 15", "Net 30", "Cash on delivery"]),
       },
     });
@@ -228,7 +228,7 @@ async function main() {
       id: "store", name: "Al-Rahma Grocery", nameAr: "بقالة الرحمة",
       address: "Sana'a, Al-Hasabah St., Yemen", addressAr: "صنعاء، شارع الحصبة، اليمن",
       phone: "+967-771-234567", email: "info@alrahma-grocery.ye",
-      taxNumber: "TX-2026-004512", currencyCode: "YER", currencySymbol: "ر.ي",
+      currencyCode: "YER", currencySymbol: "ر.ي",
       receiptFooter: "Thank you for shopping with us! / شكراً لتسوقكم معنا",
     },
   });

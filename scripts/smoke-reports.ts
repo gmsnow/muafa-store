@@ -5,7 +5,7 @@ import { db } from "../src/shared/db";
 import { parseReportRange } from "../src/features/reports/schema";
 import {
   salesSummary, profitReport, inventoryValuation, customersReport,
-  suppliersReport, taxReport, expensesReport, financialSummary, exportReportCsv,
+  suppliersReport, expensesReport, financialSummary, exportReportCsv,
 } from "../src/features/reports/service";
 
 let failures = 0;
@@ -21,8 +21,8 @@ async function main() {
 
   // ---- independent raw SQL ground truth
   const [salesTruth, returnsTruth, expTruth] = await db.$transaction([
-    db.$queryRaw<{ gross: string; tax: string; cogs: string }[]>`
-      SELECT COALESCE(SUM("total"),0)::text AS gross, COALESCE(SUM("taxTotal"),0)::text AS tax,
+    db.$queryRaw<{ gross: string; cogs: string }[]>`
+      SELECT COALESCE(SUM("total"),0)::text AS gross,
              COALESCE(SUM("costTotal"),0)::text AS cogs
       FROM sales WHERE "saleDate" >= ${range.from} AND "saleDate" < ${range.to}
         AND status IN ('COMPLETED','PARTIALLY_REFUNDED')`,
@@ -34,7 +34,6 @@ async function main() {
       FROM expenses WHERE "expenseDate" >= ${range.from} AND "expenseDate" < ${range.to}`,
   ]);
   const tGross = parseFloat(salesTruth[0].gross);
-  const tTax = parseFloat(salesTruth[0].tax);
   const tCogs = parseFloat(salesTruth[0].cogs);
   const tRetTotal = parseFloat(returnsTruth[0].total);
   const tRetCost = parseFloat(returnsTruth[0].cost);
@@ -43,15 +42,14 @@ async function main() {
   // ---- sales summary vs truth
   const s = await salesSummary(range);
   check("sales.grossSales", close(s.grossSales, tGross), `${s.grossSales} vs ${tGross}`);
-  check("sales.outputTax", close(s.outputTax, tTax));
   check("sales.returns", close(s.returnsTotal, tRetTotal));
-  check("sales.netSalesExTax formula", close(s.netSalesExTax, tGross - tTax - tRetTotal));
+  check("sales.netSales formula", close(s.netSales, tGross - tRetTotal));
 
   // ---- profit identity + truth
   const p = await profitReport(range);
   const expectedCogs = Math.max(0, tCogs - tRetCost);
   check("profit.cogs", close(p.cogs, expectedCogs), `${p.cogs} vs ${expectedCogs}`);
-  check("profit.grossProfit identity", close(p.grossProfit, p.netSalesExTax - p.cogs));
+  check("profit.grossProfit identity", close(p.grossProfit, p.netSales - p.cogs));
   check("profit.expenses", close(p.expenses, tExp));
   check("profit.netProfit identity", close(p.netProfit, p.grossProfit - p.expenses));
 
@@ -77,13 +75,6 @@ async function main() {
   check("customers.receivables", close(cust.totals.receivables, parseFloat(recTruth[0].v)));
   check("suppliers.payables", close(sup.totals.payables, parseFloat(payTruth[0].v)));
 
-  // ---- tax identities
-  const tax = await taxReport(range);
-  const inTruth = await db.$queryRaw<{ v: string }[]>`SELECT COALESCE(SUM("taxTotal"),0)::text AS v FROM purchases WHERE "date" >= ${range.from} AND "date" < ${range.to}`;
-  check("tax.outputTax", close(tax.outputTax, tTax));
-  check("tax.inputTax", close(tax.inputTax, parseFloat(inTruth[0].v)));
-  check("tax.netPayable identity", close(tax.netPayable, tax.outputTax - tax.inputTax));
-
   // ---- expenses report grand total matches expense truth
   const ex = await expensesReport(range);
   check("expenses.grandTotal", close(ex.grandTotal, tExp));
@@ -106,7 +97,7 @@ async function main() {
   );
 
   // ---- CSV exports produce headers for all families
-  for (const family of ["sales", "purchases", "profit", "inventory", "customers", "suppliers", "tax", "expenses"]) {
+  for (const family of ["sales", "purchases", "profit", "inventory", "customers", "suppliers", "expenses"]) {
     const csv = await exportReportCsv(family, range);
     check(`csv:${family}`, typeof csv === "string" && csv.length > 10 && csv.split("\n")[0].includes(","));
   }

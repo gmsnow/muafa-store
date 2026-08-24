@@ -569,14 +569,6 @@ export async function exportReportCsv(family: string, range: ReportRange): Promi
         toCsv(["payables", "purchaseVolume"], [[totals.payables, totals.purchaseVolume]]),
       ].join("\n");
     }
-    case "tax": {
-      const t = await taxReport(range);
-      return [
-        toCsv(["metric", "value"], [["outputTax", t.outputTax], ["inputTax", t.inputTax], ["netPayable", t.netPayable]]),
-        "",
-        toCsv(["month", "output", "input", "net"], t.monthly.map((m) => [m.month, m.output, m.input, m.net])),
-      ].join("\n");
-    }
     case "expenses": {
       const e = await expensesReport(range);
       return [

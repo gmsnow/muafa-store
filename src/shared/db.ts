@@ -12,8 +12,17 @@ function createClient(): PrismaClient {
   return new PrismaClient({ adapter, log: ["warn", "error"] });
 }
 
-export const db = globalForPrisma.prisma ?? createClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = db;
+function getClient(): PrismaClient {
+  if (!globalForPrisma.prisma) globalForPrisma.prisma = createClient();
+  return globalForPrisma.prisma;
 }
+
+// Lazy proxy so importing this module never throws during build-time page-data
+// collection — DATABASE_URL is only required when a query actually runs.
+export const db: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getClient();
+    const value = Reflect.get(client as object, prop);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

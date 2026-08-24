@@ -6210,3 +6210,51 @@ See more: https://nextjs.org/docs/app/guides/local-development
  GET /login?next=%2Finventory%2Fproducts 200 in 602ms (next.js: 214ms, proxy.ts: 144ms, application-code: 244ms)
  GET /sales/pos 200 in 789ms (next.js: 366ms, proxy.ts: 148ms, application-code: 275ms)
  GET /reports/purchases 200 in 792ms (next.js: 281ms, proxy.ts: 150ms, application-code: 362ms)
+ GET /login?next=%2Finventory%2Fproducts 200 in 86ms (next.js: 16ms, proxy.ts: 5ms, application-code: 65ms)
+⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+▲ Next.js 16.3.2 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.105:3001
+- Environments: .env.local, .env
+✓ Ready in 511ms
+✓ Running next.config.ts took 50ms
+
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/login" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="ar" dir="rtl" suppressHydrationWarning={true}>
+                          <body
+                            className="cairo_8c9f7167-module__DW49aG__variable geist_mono_8d43a2aa-module__8Li5zG__var..."
+-                           cz-shortcut-listen="true"
+                          >
+                  ...
+ 
+⚠ Slow filesystem detected. The benchmark took 32884ms. If \\?\H:\hitham\new project\grocery\.next\dev is a network drive, consider moving it to a local folder.
+See more: https://nextjs.org/docs/app/guides/local-development
+ GET /login?next=%2Finventory%2Fproducts 200 in 1033ms (next.js: 196ms, proxy.ts: 258ms, application-code: 578ms)

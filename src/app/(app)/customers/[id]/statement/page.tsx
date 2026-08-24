@@ -54,11 +54,53 @@ export default async function CustomerStatementPage({
 
   return (
     <div className="space-y-4">
-      <style>{`@media print {
-        body * { visibility: hidden !important; }
-        #stmt-paper, #stmt-paper * { visibility: visible !important; }
-        #stmt-paper { position: absolute; inset: 0; width: 100%; margin: 0; box-shadow: none !important; }
-      }`}</style>
+      <style>{`
+        #stmt-paper {
+          max-width: 820px;
+          margin: 0 auto;
+          background: #ffffff;
+          color: #1a1a1a;
+          padding: 36px;
+          border-radius: 8px;
+          border: 1px solid #e5e5e5;
+          font-family: inherit;
+        }
+        .stmt-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+          border-bottom: 2px solid #1a1a1a;
+          padding-bottom: 14px;
+        }
+        .stmt-store { font-size: 24px; font-weight: 700; }
+        .stmt-title { font-size: 20px; font-weight: 700; }
+        .stmt-meta { font-size: 12px; color: #555555; }
+        .stmt-info { width: 100%; margin-top: 16px; font-size: 13px; }
+        .stmt-ledger { width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 12.5px; }
+        .stmt-total-box {
+          font-size: 14px;
+          font-weight: 700;
+          background: #f3f3f3;
+          padding: 10px 16px;
+          border-radius: 6px;
+        }
+        @media (max-width: 640px) {
+          #stmt-paper { padding: 16px 10px; border-radius: 6px; }
+          .stmt-head { padding-bottom: 10px; }
+          .stmt-store { font-size: 15px; }
+          .stmt-title { font-size: 13px; }
+          .stmt-meta { font-size: 9.5px; }
+          .stmt-info { font-size: 11px; margin-top: 10px; }
+          .stmt-ledger { font-size: 10.5px; margin-top: 12px; }
+          .stmt-total-box { font-size: 12px; padding: 7px 10px; }
+        }
+        @media print {
+          body * { visibility: hidden !important; }
+          #stmt-paper, #stmt-paper * { visibility: visible !important; }
+          #stmt-paper { position: absolute; inset: 0; width: 100%; margin: 0; box-shadow: none !important; }
+        }
+      `}</style>
 
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <div className="flex items-center gap-2">
@@ -79,6 +121,7 @@ export default async function CustomerStatementPage({
           <PdfActions
           fileName={`statement-${customer.code}`}
           targetId="stmt-paper"
+          captureWidth={880}
           labels={{
             sharePdf: t.common.sharePdf,
             generatingPdf: t.common.generatingPdf,
@@ -87,37 +130,24 @@ export default async function CustomerStatementPage({
         />
       </div>
 
-      <div
-        id="stmt-paper"
-        dir="rtl"
-        style={{
-          maxWidth: 820,
-          margin: "0 auto",
-          background: "#ffffff",
-          color: "#1a1a1a",
-          padding: 36,
-          borderRadius: 8,
-          border: "1px solid #e5e5e5",
-          fontFamily: "inherit",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #1a1a1a", paddingBottom: 14 }}>
+      <div id="stmt-paper" dir="rtl">
+        <div className="stmt-head">
           <div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{storeName}</div>
+            <div className="stmt-store">{storeName}</div>
             {(store.addressAr || store.address) && (
-              <div style={{ fontSize: 12, color: "#555555", marginTop: 4 }}>{store.addressAr || store.address}</div>
+              <div className="stmt-meta" style={{ marginTop: 4 }}>{store.addressAr || store.address}</div>
             )}
             {store.phone && (
-              <div style={{ fontSize: 12, color: "#555555", marginTop: 2 }} dir="ltr">{store.phone}</div>
+              <div className="stmt-meta" style={{ marginTop: 2 }} dir="ltr">{store.phone}</div>
             )}
           </div>
           <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>{t.customers.statementTitle}</div>
-            <div style={{ fontSize: 12, color: "#555555", marginTop: 6 }}>
+            <div className="stmt-title">{t.customers.statementTitle}</div>
+            <div className="stmt-meta" style={{ marginTop: 6 }}>
               {t.customers.printedAt}: {formatDateTime(new Date(), locale)}
             </div>
             {(from || to) && (
-              <div style={{ fontSize: 12, color: "#555555", marginTop: 2 }}>
+              <div className="stmt-meta" style={{ marginTop: 2 }}>
                 {t.customers.period}: {from ? formatDateTime(from, locale) : "…"} {t.customers.asOf}{" "}
                 {to ? formatDateTime(to, locale) : "…"}
               </div>
@@ -125,7 +155,7 @@ export default async function CustomerStatementPage({
           </div>
         </div>
 
-        <table style={{ width: "100%", marginTop: 16, fontSize: 13 }}>
+        <table className="stmt-info">
           <tbody>
             <tr>
               <td style={infoCell}>{t.products.name}: <b>{customer.nameAr || customer.name}</b></td>
@@ -141,7 +171,7 @@ export default async function CustomerStatementPage({
           </tbody>
         </table>
 
-        <table style={{ width: "100%", marginTop: 18, borderCollapse: "collapse", fontSize: 12.5 }}>
+        <table className="stmt-ledger">
           <thead>
             <tr style={{ background: "#f3f3f3" }}>
               <th style={headCell}>{t.common.date}</th>
@@ -199,8 +229,8 @@ export default async function CustomerStatementPage({
           </p>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22, alignItems: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, background: "#f3f3f3", padding: "10px 16px", borderRadius: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22, alignItems: "center", gap: 8 }}>
+          <div className="stmt-total-box">
             {t.customers.closingBalance}: <span dir="ltr">{formatMoney(D(customer.balance).toNumber(), locale)}</span>
           </div>
           <div style={{ fontSize: 12, color: "#555555" }}>

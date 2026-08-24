@@ -21,10 +21,17 @@ export function PdfActions({
   fileName,
   targetId = "pdf-paper",
   labels,
+  captureWidth,
 }: {
   fileName: string;
   targetId?: string;
   labels: PdfActionLabels;
+  /**
+   * Fixed viewport width emulated while capturing (html2canvas windowWidth).
+   * Keeps PDF layout identical on phones instead of capturing the narrow
+   * mobile layout stretched over A4 (giant fonts).
+   */
+  captureWidth?: number;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +42,11 @@ export function PdfActions({
     ]);
     const el = document.getElementById(targetId);
     if (!el) throw new Error(`#${targetId} not found`);
-    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      ...(captureWidth ? { windowWidth: Math.max(captureWidth, el.offsetWidth) } : {}),
+    });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
@@ -52,7 +63,7 @@ export function PdfActions({
       }
     }
     return pdf.output("blob");
-  }, [targetId]);
+  }, [targetId, captureWidth]);
 
   const triggerDownload = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);

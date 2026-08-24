@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   const language = /^[a-z]{2,3}$/i.test(rawLanguage.trim()) ? rawLanguage.trim().toLowerCase() : "ar";
   const initialPrompt =
     process.env.CLOUDFLARE_AI_INITIAL_PROMPT ||
-    "تسجيل صوتي لحسابات محل بقالة في اليمن: فاتورة بيع، فاتورة شراء، دفعة، سلفة، سكر، أرز بشاور، دقيق، زيت، شاي أحمر، حبوب، لبنة، عسل، بيض، كيلو، نص كيلو، ربع، غرام، لتر، علبة، كرتونة، ريال، ألف ريال";
+    "تسجيل صوتي بالعربية اللهجة اليمنية داخل محل بقالة. عبارات شائعة: دحين، زين، شيل، جيب لي، كم الريال، نص كيلو، ربع كيلو، رطل، علبة، كرتونة، لتر. أصناف: سكر، أرز بشاور، دقيق، زيت دوار الشمس، شاي أحمر، حبوب، لبنة، سمن بلدي، عسل سدر، بيض، مكرونة، هيل، قرنفل. حسابات: فاتورة بيع، فاتورة شراء، دفعة، سلفة، مدفوع نقداً، باقي عليه، ريال، مية ريال، ألف ريال.";
   console.log(`[ai/transcribe] model=${model} language=${language}`);
 
   const form = await request.formData();

@@ -1,0 +1,67 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentUser } from "@/features/auth/session";
+
+/**
+ * Cloudflare Workers AI speech-to-text proxy (Whisper).
+ * Receives multipart/form-data { audio: Blob }, forwards it to the
+ * AI run endpoint with the server-only token, returns { text }.
+ * Credentials never leave the server.
+ */
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !token) {
+    return NextResponse.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
+  }
+  const model = process.env.CLOUDFLARE_AI_MODEL || "@cf/openai/whisper";
+
+  const form = await request.formData();
+  const audio = form.get("audio");
+  if (!(audio instanceof File) || audio.size === 0) {
+    return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
+  }
+  if (audio.size > 20 * 1024 * 1024) {
+    return NextResponse.json({ error: "AUDIO_TOO_LARGE" }, { status: 413 });
+  }
+
+  // Workers AI Whisper expects the raw audio bytes as the request body
+  // with an audio/* Content-Type (multipart is rejected by this model).
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(await audio.arrayBuffer());
+  } catch {
+    return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": audio.type && audio.type.startsWith("audio/") ? audio.type : "audio/webm",
+        },
+        body: new Uint8Array(buffer),
+        signal: AbortSignal.timeout(60_000),
+      },
+    );
+  } catch {
+    return NextResponse.json({ error: "AI_UPSTREAM_TIMEOUT" }, { status: 504 });
+  }
+
+  const payload = (await res.json().catch(() => null)) as
+    | { success?: boolean; result?: { text?: string }; errors?: unknown[] }
+    | null;
+
+  if (!res.ok || !payload?.success || typeof payload.result?.text !== "string") {
+    console.error("cloudflare ai error", res.status, payload?.errors ?? payload);
+    return NextResponse.json({ error: "AI_TRANSCRIBE_FAILED" }, { status: 502 });
+  }
+
+  return NextResponse.json({ text: payload.result.text.trim() });
+}

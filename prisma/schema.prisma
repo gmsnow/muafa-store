@@ -1,0 +1,969 @@
+// ============================================================================
+// Grocery Management System — PostgreSQL schema (Prisma 7)
+// Conventions:
+//  - UUID PKs, createdAt/updatedAt on all business tables
+//  - Money: Decimal(14,2) — Quantities: Decimal(14,3) — Rates: Decimal(5,2)
+//  - Financial documents are immutable; corrections via compensating documents
+//  - Soft delete only where safe (catalog/party tables), never financial rows
+//  - Table names snake_case via @@map for pgAdmin readability
+// ============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+
+  @@map("account_status")
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  SALE_RETURN
+  PURCHASE_RETURN
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  DAMAGE
+  EXPIRED
+  TRANSFER_IN
+  TRANSFER_OUT
+  OPENING
+
+  @@map("movement_type")
+}
+
+enum AdjustmentType {
+  INCREASE
+  DECREASE
+
+  @@map("adjustment_type")
+}
+
+enum SaleStatus {
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+
+  @@map("sale_status")
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  WALLET
+  CREDIT
+
+  @@map("payment_method")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+
+  @@map("purchase_order_status")
+}
+
+enum CustomerTransactionType {
+  DEBT
+  PAYMENT
+  REFUND
+  ADJUSTMENT
+
+  @@map("customer_transaction_type")
+}
+
+enum LoyaltyTransactionType {
+  EARN
+  REDEEM
+  ADJUST
+
+  @@map("loyalty_transaction_type")
+}
+
+enum NotificationType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRING
+  EXPIRED
+  PENDING_PO
+  CREDIT_LIMIT
+  FAILED_OPERATION
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+enum BackupStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+
+  @@map("backup_status")
+}
+
+// ============================================================================
+// IDENTITY & RBAC
+// ============================================================================
+
+model User {
+  id                  String        @id @default(uuid())
+  username            String        @unique
+  email               String?       @unique
+  passwordHash        String
+  fullName            String
+  fullNameAr          String?
+  phone               String?
+  roleId              String
+  status              AccountStatus @default(ACTIVE)
+  mustChangePassword  Boolean       @default(false)
+  failedLoginAttempts Int           @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  role                Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  sessions            Session[]
+  loginActivities     LoginActivity[]
+  passwordResetTokens PasswordResetToken[]
+  sales               Sale[]               @relation("SaleCashier")
+  stockAdjustments    StockAdjustment[]
+  purchaseOrders      PurchaseOrder[]
+  purchases           Purchase[]
+  purchaseReturns     PurchaseReturn[]
+  saleReturns         SaleReturn[]
+  expenses            Expense[]
+  inventoryMovements  InventoryMovement[]
+  auditLogs           AuditLog[]
+  backupRecords       BackupRecord[]
+
+  @@index([roleId])
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  nameAr      String?
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  key         String  @id
+  description String?
+  group       String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionKey String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleId, permissionKey])
+  @@index([permissionKey])
+  @@map("role_permissions")
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  ip        String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model LoginActivity {
+  id        String   @id @default(uuid())
+  userId    String?
+  email     String
+  success   Boolean
+  reason    String?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([email])
+  @@map("login_activities")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ============================================================================
+// CATALOG
+// ============================================================================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  nameAr      String?
+  description String?
+  parentId    String?
+  imageUrl    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+  @@unique([name, parentId])
+  @@map("categories")
+}
+
+model Brand {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  nameAr      String?
+  description String?
+  logoUrl     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@map("brands")
+}
+
+model Unit {
+  id      String  @id @default(uuid())
+  name    String  @unique
+  nameAr  String?
+  symbol  String?
+  isBase  Boolean @default(false)
+  isActive Boolean @default(true)
+
+  products       Product[]
+  conversionsFrom UnitConversion[] @relation("ConversionFrom")
+  conversionsTo   UnitConversion[] @relation("ConversionTo")
+
+  @@map("units")
+}
+
+model UnitConversion {
+  id        String @id @default(uuid())
+  fromUnitId String
+  toUnitId   String
+  factor    Decimal @db.Decimal(18, 6)
+
+  fromUnit Unit @relation("ConversionFrom", fields: [fromUnitId], references: [id], onDelete: Cascade)
+  toUnit   Unit @relation("ConversionTo", fields: [toUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUnitId, toUnitId])
+  @@map("unit_conversions")
+}
+
+model Product {
+  id                String    @id @default(uuid())
+  sku               String    @unique
+  barcode           String?
+  name              String
+  nameAr            String?
+  description       String?
+  categoryId        String
+  brandId           String?
+  unitId            String
+  costPrice         Decimal   @db.Decimal(14, 2)
+  sellingPrice      Decimal   @db.Decimal(14, 2)
+  wholesalePrice    Decimal?  @db.Decimal(14, 2)
+  minPrice          Decimal?  @db.Decimal(14, 2)
+  imageUrl          String?
+  minStock          Decimal   @default(0) @db.Decimal(14, 3)
+  maxStock          Decimal?  @db.Decimal(14, 3)
+  reorderLevel      Decimal   @default(0) @db.Decimal(14, 3)
+  defaultSupplierId String?
+  trackBatches      Boolean   @default(false)
+  trackExpiry       Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  category       Category           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brand          Brand?             @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  unit           Unit               @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  defaultSupplier Supplier?          @relation("ProductDefaultSupplier", fields: [defaultSupplierId], references: [id], onDelete: SetNull)
+  barcodes       ProductBarcode[]
+  batches        ProductBatch[]
+  inventory      Inventory?
+  movements      InventoryMovement[]
+  adjustments    StockAdjustment[]
+  saleItems      SaleItem[]
+  saleReturnItems SaleReturnItem[]
+  poItems        PurchaseOrderItem[]
+  purchaseItems  PurchaseItem[]
+  purchaseReturnItems PurchaseReturnItem[]
+
+  @@index([barcode])
+  @@index([name])
+  @@index([nameAr])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([isActive])
+  @@map("products")
+}
+
+model ProductBarcode {
+  id        String   @id @default(uuid())
+  productId String
+  barcode   String   @unique
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_barcodes")
+}
+
+model ProductBatch {
+  id          String    @id @default(uuid())
+  productId   String
+  batchNo     String
+  mfgDate     DateTime?
+  expiryDate  DateTime?
+  quantity    Decimal   @db.Decimal(14, 3)
+  costPrice   Decimal   @db.Decimal(14, 2)
+  supplierId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  movements InventoryMovement[]
+
+  @@unique([productId, batchNo])
+  @@index([expiryDate])
+  @@index([productId])
+  @@map("product_batches")
+}
+
+// ============================================================================
+// STOCK
+// ============================================================================
+
+model Inventory {
+  id        String   @id @default(uuid())
+  productId String   @unique
+  quantity  Decimal  @default(0) @db.Decimal(14, 3)
+  reserved  Decimal  @default(0) @db.Decimal(14, 3)
+  lastCost  Decimal  @default(0) @db.Decimal(14, 2)
+  avgCost   Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("inventory")
+}
+
+model InventoryMovement {
+  id        String       @id @default(uuid())
+  productId String
+  batchId   String?
+  type      MovementType
+  quantity  Decimal      @db.Decimal(14, 3)
+  unitCost  Decimal      @default(0) @db.Decimal(14, 2)
+  refType   String?
+  refId     String?
+  note      String?
+  userId    String?
+  createdAt DateTime     @default(now())
+
+  product Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch   ProductBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  user    User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt])
+  @@index([type])
+  @@index([refType, refId])
+  @@index([createdAt])
+  @@map("inventory_movements")
+}
+
+model StockAdjustment {
+  id               String         @id @default(uuid())
+  adjustmentNumber String         @unique
+  productId        String
+  type             AdjustmentType
+  quantity         Decimal        @db.Decimal(14, 3)
+  previousQuantity Decimal        @db.Decimal(14, 3)
+  newQuantity      Decimal        @db.Decimal(14, 3)
+  reason           String
+  note             String?
+  movementId       String?
+  userId           String
+  createdAt        DateTime       @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([productId])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("stock_adjustments")
+}
+
+// ============================================================================
+// PROCUREMENT
+// ============================================================================
+
+model Supplier {
+  id           String    @id @default(uuid())
+  code         String    @unique
+  name         String
+  nameAr       String?
+  company      String?
+  phone        String?
+  email        String?
+  address      String?
+  creditLimit  Decimal   @default(0) @db.Decimal(14, 2)
+  paymentTerms String?
+  balance      Decimal   @default(0) @db.Decimal(14, 2)
+  notes        String?
+  isActive     Boolean   @default(true)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  products             Product[]             @relation("ProductDefaultSupplier")
+  batches              ProductBatch[]
+  purchaseOrders       PurchaseOrder[]
+  purchases            Purchase[]
+  purchaseReturns      PurchaseReturn[]
+
+  @@index([name])
+  @@index([phone])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id             String             @id @default(uuid())
+  poNumber       String             @unique
+  supplierId     String
+  userId         String
+  orderDate      DateTime           @default(now())
+  expectedDate   DateTime?
+  status         PurchaseOrderStatus @default(DRAFT)
+  subtotal       Decimal            @db.Decimal(14, 2)
+  discountTotal  Decimal            @default(0) @db.Decimal(14, 2)
+  total          Decimal            @db.Decimal(14, 2)
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  supplier Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items    PurchaseOrderItem[]
+  purchases Purchase[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([orderDate])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String  @id @default(uuid())
+  purchaseOrderId String
+  productId   String
+  quantity    Decimal @db.Decimal(14, 3)
+  receivedQty Decimal @default(0) @db.Decimal(14, 3)
+  unitCost    Decimal @db.Decimal(14, 2)
+  discount    Decimal @default(0) @db.Decimal(14, 2)
+  lineTotal   Decimal @db.Decimal(14, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+model Purchase {
+  id             String   @id @default(uuid())
+  purchaseNumber String   @unique
+  supplierId     String
+  purchaseOrderId String?
+  userId         String
+  date           DateTime @default(now())
+  subtotal       Decimal  @db.Decimal(14, 2)
+  discountTotal  Decimal  @default(0) @db.Decimal(14, 2)
+  total          Decimal  @db.Decimal(14, 2)
+  paidAmount     Decimal  @default(0) @db.Decimal(14, 2)
+  dueAmount      Decimal  @default(0) @db.Decimal(14, 2)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items    PurchaseItem[]
+  returns  PurchaseReturn[]
+
+  @@index([supplierId])
+  @@index([date])
+  @@index([purchaseOrderId])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String    @id @default(uuid())
+  purchaseId  String
+  productId   String
+  batchNo     String?
+  mfgDate     DateTime?
+  expDate     DateTime?
+  quantity    Decimal   @db.Decimal(14, 3)
+  unitCost    Decimal   @db.Decimal(14, 2)
+  discount    Decimal   @default(0) @db.Decimal(14, 2)
+  lineTotal   Decimal   @db.Decimal(14, 2)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@map("purchase_items")
+}
+
+model PurchaseReturn {
+  id              String   @id @default(uuid())
+  returnNumber    String   @unique
+  supplierId      String
+  purchaseId      String?
+  userId          String
+  date            DateTime @default(now())
+  subtotal        Decimal  @db.Decimal(14, 2)
+  total           Decimal  @db.Decimal(14, 2)
+  reason          String
+  refundAmount    Decimal  @default(0) @db.Decimal(14, 2)
+  creditAmount    Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  supplier Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchase Purchase?            @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items    PurchaseReturnItem[]
+
+  @@index([supplierId])
+  @@index([date])
+  @@map("purchase_returns")
+}
+
+model PurchaseReturnItem {
+  id             String  @id @default(uuid())
+  purchaseReturnId String
+  productId      String
+  quantity       Decimal @db.Decimal(14, 3)
+  unitCost       Decimal @db.Decimal(14, 2)
+  lineTotal      Decimal @db.Decimal(14, 2)
+
+  purchaseReturn PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseReturnId])
+  @@index([productId])
+  @@map("purchase_return_items")
+}
+
+// ============================================================================
+// CUSTOMERS & CRM
+// ============================================================================
+
+model CustomerGroup {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  nameAr      String?
+  description String?
+  discountRate Decimal @default(0) @db.Decimal(5, 2)
+  priceMode   String  @default("retail")
+
+  customers Customer[]
+
+  @@map("customer_groups")
+}
+
+model Customer {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  name           String
+  nameAr         String?
+  phone          String?
+  email          String?
+  address        String?
+  groupId        String?
+  creditLimit    Decimal   @default(0) @db.Decimal(14, 2)
+  balance        Decimal   @default(0) @db.Decimal(14, 2)
+  loyaltyPoints  Decimal   @default(0) @db.Decimal(14, 2)
+  totalPurchases Decimal   @default(0) @db.Decimal(14, 2)
+  lastPurchaseAt DateTime?
+  notes          String?
+  isActive       Boolean   @default(true)
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  group       CustomerGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  sales       Sale[]
+  transactions CustomerTransaction[]
+  loyaltyTransactions LoyaltyTransaction[]
+
+  @@index([phone])
+  @@index([name])
+  @@index([nameAr])
+  @@index([groupId])
+  @@map("customers")
+}
+
+model CustomerTransaction {
+  id          String                 @id @default(uuid())
+  customerId  String
+  type        CustomerTransactionType
+  amount      Decimal                @db.Decimal(14, 2)
+  balanceAfter Decimal               @db.Decimal(14, 2)
+  refType     String?
+  refId       String?
+  note        String?
+  userId      String?
+  createdAt   DateTime               @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, createdAt])
+  @@index([type])
+  @@map("customer_transactions")
+}
+
+model LoyaltyTransaction {
+  id          String                @id @default(uuid())
+  customerId  String
+  type        LoyaltyTransactionType
+  points      Decimal               @db.Decimal(14, 2)
+  balanceAfter Decimal              @db.Decimal(14, 2)
+  refType     String?
+  refId       String?
+  note        String?
+  createdAt   DateTime              @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, createdAt])
+  @@map("loyalty_transactions")
+}
+
+// ============================================================================
+// SALES
+// ============================================================================
+
+model Sale {
+  id                String     @id @default(uuid())
+  invoiceNumber     String     @unique
+  customerId        String?
+  cashierId         String
+  saleDate          DateTime   @default(now())
+  status            SaleStatus @default(COMPLETED)
+  subtotal          Decimal    @db.Decimal(14, 2)
+  itemDiscountTotal Decimal    @default(0) @db.Decimal(14, 2)
+  invoiceDiscount   Decimal    @default(0) @db.Decimal(14, 2)
+  total             Decimal    @db.Decimal(14, 2)
+  costTotal         Decimal    @default(0) @db.Decimal(14, 2)
+  paidTotal         Decimal    @default(0) @db.Decimal(14, 2)
+  changeDue         Decimal    @default(0) @db.Decimal(14, 2)
+  creditAmount      Decimal    @default(0) @db.Decimal(14, 2)
+  refundedAmount    Decimal    @default(0) @db.Decimal(14, 2)
+  loyaltyPointsEarned Decimal  @default(0) @db.Decimal(14, 2)
+  loyaltyPointsRedeemed Decimal @default(0) @db.Decimal(14, 2)
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  customer Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cashier  User             @relation("SaleCashier", fields: [cashierId], references: [id], onDelete: Restrict)
+  items    SaleItem[]
+  payments SalePayment[]
+  returns  SaleReturn[]
+
+  @@index([invoiceNumber])
+  @@index([saleDate])
+  @@index([cashierId])
+  @@index([customerId])
+  @@index([status])
+  @@map("sales")
+}
+
+model SaleItem {
+  id          String  @id @default(uuid())
+  saleId      String
+  productId   String
+  productName String
+  productNameAr String?
+  sku         String
+  unitName    String?
+  quantity    Decimal @db.Decimal(14, 3)
+  unitPrice   Decimal @db.Decimal(14, 2)
+  discount    Decimal @default(0) @db.Decimal(14, 2)
+  costPrice   Decimal @default(0) @db.Decimal(14, 2)
+  lineTotal   Decimal @db.Decimal(14, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id        String        @id @default(uuid())
+  saleId    String
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(14, 2)
+  reference String?
+  createdAt DateTime      @default(now())
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([method])
+  @@map("sale_payments")
+}
+
+model SaleReturn {
+  id           String   @id @default(uuid())
+  returnNumber String   @unique
+  saleId       String
+  userId       String
+  returnDate   DateTime @default(now())
+  subtotal     Decimal  @db.Decimal(14, 2)
+  total        Decimal  @db.Decimal(14, 2)
+  costTotal    Decimal  @default(0) @db.Decimal(14, 2)
+  reason       String
+  restock      Boolean  @default(true)
+  refundAmount Decimal  @default(0) @db.Decimal(14, 2)
+  creditAmount Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sale  Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  user  User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items SaleReturnItem[]
+
+  @@index([saleId])
+  @@index([returnDate])
+  @@map("sale_returns")
+}
+
+model SaleReturnItem {
+  id            String  @id @default(uuid())
+  saleReturnId  String
+  saleItemId    String
+  productId     String
+  quantity      Decimal @db.Decimal(14, 3)
+  unitPrice     Decimal @db.Decimal(14, 2)
+  costPrice     Decimal @default(0) @db.Decimal(14, 2)
+  lineTotal     Decimal @db.Decimal(14, 2)
+
+  saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleReturnId])
+  @@index([productId])
+  @@map("sale_return_items")
+}
+
+// ============================================================================
+// EXPENSES
+// ============================================================================
+
+model ExpenseCategory {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  nameAr      String?
+  description String?
+  isActive    Boolean @default(true)
+
+  expenses Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id            String        @id @default(uuid())
+  expenseNumber String        @unique
+  categoryId    String
+  amount        Decimal       @db.Decimal(14, 2)
+  method        PaymentMethod @default(CASH)
+  description   String?
+  notes         String?
+  expenseDate   DateTime      @default(now())
+  userId        String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId])
+  @@index([expenseDate])
+  @@index([userId])
+  @@map("expenses")
+}
+
+// ============================================================================
+// SYSTEM
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model StoreSettings {
+  id          String   @id @default("store")
+  name        String
+  nameAr      String?
+  logoUrl     String?
+  address     String?
+  addressAr   String?
+  phone       String?
+  email       String?
+  currencyCode String  @default("YER")
+  currencySymbol String @default("\u0631.\u064A")
+  receiptFooter String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("store_settings")
+}
+
+model SystemSettings {
+  id                    String  @id @default("system")
+  defaultTaxRate        Decimal @default(0) @db.Decimal(5, 2)
+  invoicePrefix         String  @default("INV-")
+  lowStockThresholdDays Int     @default(7)
+  expirationWarningDays Int     @default(30)
+  batchTrackingEnabled  Boolean @default(true)
+  enableLoyalty         Boolean @default(true)
+  loyaltyEarnPerSpent   Decimal @default(1) @db.Decimal(14, 4)
+  loyaltyPointValue     Decimal @default(1) @db.Decimal(14, 4)
+  language              String  @default("ar")
+  dateFormat            String  @default("yyyy-MM-dd")
+  timezone              String  @default("Asia/Aden")
+  passwordMinLength     Int     @default(8)
+  sessionTimeoutMinutes Int     @default(480)
+  maxLoginAttempts      Int     @default(5)
+  lockoutMinutes        Int     @default(15)
+  updatedAt             DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model BackupRecord {
+  id         String       @id @default(uuid())
+  filename   String
+  sizeBytes  BigInt?
+  status     BackupStatus @default(IN_PROGRESS)
+  note       String?
+  createdBy  String
+  createdAt  DateTime     @default(now())
+
+  user User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("backup_records")
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  type       NotificationType
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  @@index([isRead, createdAt])
+  @@index([type])
+  @@map("notifications")
+}

@@ -16,7 +16,9 @@ export async function POST(request: NextRequest) {
   if (!accountId || !token) {
     return NextResponse.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
   }
-  const model = process.env.CLOUDFLARE_AI_MODEL || "@cf/openai/whisper";
+  const model = process.env.CLOUDFLARE_AI_MODEL || "@cf/openai/whisper-large-v3-turbo";
+  // Bias recognition toward the app's primary language (Arabic).
+  const language = process.env.CLOUDFLARE_AI_LANGUAGE || "ar";
 
   const form = await request.formData();
   const audio = form.get("audio");
@@ -27,8 +29,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "AUDIO_TOO_LARGE" }, { status: 413 });
   }
 
-  // Workers AI Whisper expects the raw audio bytes as the request body
-  // with an audio/* Content-Type (multipart is rejected by this model).
   let buffer: Buffer;
   try {
     buffer = Buffer.from(await audio.arrayBuffer());
@@ -36,19 +36,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
   }
 
+  // whisper-large-v3-turbo takes a JSON payload and honours language/task hints;
+  // the legacy @cf/openai/whisper only accepts raw audio bytes.
+  const supportsHints = /turbo|large|v3/.test(model);
+
   let res: Response;
   try {
     res = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": audio.type && audio.type.startsWith("audio/") ? audio.type : "audio/webm",
-        },
-        body: new Uint8Array(buffer),
-        signal: AbortSignal.timeout(60_000),
-      },
+      supportsHints
+        ? {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              audio: buffer.toString("base64"),
+              task: "transcribe",
+              language,
+            }),
+            signal: AbortSignal.timeout(60_000),
+          }
+        : {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": audio.type && audio.type.startsWith("audio/") ? audio.type : "audio/webm",
+            },
+            body: new Uint8Array(buffer),
+            signal: AbortSignal.timeout(60_000),
+          },
     );
   } catch {
     return NextResponse.json({ error: "AI_UPSTREAM_TIMEOUT" }, { status: 504 });

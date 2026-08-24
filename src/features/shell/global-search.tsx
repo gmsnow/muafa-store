@@ -14,9 +14,16 @@ interface Results {
   customers: { id: string; code: string; name: string; balance: number }[];
   suppliers: { id: string; code: string; name: string }[];
   invoices: { id: string; invoiceNumber: string; total: number; customerName: string | null }[];
+  purchases: { id: string; purchaseNumber: string; total: number; supplierName: string }[];
+  purchaseOrders: { id: string; poNumber: string; supplierName: string }[];
+  expenses: { id: string; expenseNumber: string; amount: number; description: string | null }[];
+  users: { id: string; username: string; fullName: string }[];
 }
 
-const EMPTY: Results = { products: [], customers: [], suppliers: [], invoices: [] };
+const EMPTY: Results = {
+  products: [], customers: [], suppliers: [], invoices: [],
+  purchases: [], purchaseOrders: [], expenses: [], users: [],
+};
 
 export function GlobalSearch({ t }: { t: Dictionary }) {
   const router = useRouter();
@@ -58,7 +65,9 @@ export function GlobalSearch({ t }: { t: Dictionary }) {
 
   const hasAny =
     results.products.length > 0 || results.customers.length > 0 ||
-    results.suppliers.length > 0 || results.invoices.length > 0;
+    results.suppliers.length > 0 || results.invoices.length > 0 ||
+    results.purchases.length > 0 || results.purchaseOrders.length > 0 ||
+    results.expenses.length > 0 || results.users.length > 0;
 
   return (
     <>
@@ -121,6 +130,46 @@ export function GlobalSearch({ t }: { t: Dictionary }) {
                 <CommandItem key={i.id} value={`i-${i.id}`} onSelect={() => go(`/sales/receipt/${i.id}`)}>
                   <span className="flex-1 truncate">{i.customerName ?? t.sales.walkInCustomer}</span>
                   <span className="font-mono text-xs text-muted-foreground" dir="ltr">{i.invoiceNumber}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {results.purchases.length > 0 && (
+            <CommandGroup heading={t.procurement.purchasesTitle}>
+              {results.purchases.map((p) => (
+                <CommandItem key={p.id} value={`pu-${p.id}`} onSelect={() => go("/procurement/purchases")}>
+                  <span className="flex-1 truncate">{p.supplierName}</span>
+                  <span className="font-mono text-xs text-muted-foreground" dir="ltr">{p.purchaseNumber}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {results.purchaseOrders.length > 0 && (
+            <CommandGroup heading={t.nav.purchaseOrders}>
+              {results.purchaseOrders.map((p) => (
+                <CommandItem key={p.id} value={`po-${p.id}`} onSelect={() => go("/procurement/purchase-orders")}>
+                  <span className="flex-1 truncate">{p.supplierName}</span>
+                  <span className="font-mono text-xs text-muted-foreground" dir="ltr">{p.poNumber}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {results.expenses.length > 0 && (
+            <CommandGroup heading={t.expensesPage.title}>
+              {results.expenses.map((e) => (
+                <CommandItem key={e.id} value={`e-${e.id}`} onSelect={() => go("/expenses")}>
+                  <span className="flex-1 truncate">{e.description ?? e.expenseNumber}</span>
+                  <span className="font-mono text-xs text-muted-foreground" dir="ltr">{e.expenseNumber}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {results.users.length > 0 && (
+            <CommandGroup heading={t.usersPage.title}>
+              {results.users.map((u) => (
+                <CommandItem key={u.id} value={`u-${u.id}`} onSelect={() => go("/users")}>
+                  <span className="flex-1 truncate">{u.fullName}</span>
+                  <span className="font-mono text-xs text-muted-foreground" dir="ltr">{u.username}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

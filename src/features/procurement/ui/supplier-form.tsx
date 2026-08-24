@@ -16,7 +16,7 @@ import { saveSupplierAction, supplierEditAction, deleteSupplierAction } from "..
 
 export interface SupplierFormTarget {
   id: string; name: string; nameAr: string | null; company: string | null;
-  phone: string | null; email: string | null; address: string | null;
+  phone: string | null; address: string | null;
   creditLimit: string; paymentTerms: string | null;
   notes: string | null; isActive: boolean;
 }
@@ -93,10 +93,6 @@ function InnerForm({
         <div className="space-y-1">
           <Label>{t.phone}</Label>
           <VoiceInput name="phone" dir="ltr" defaultValue={edit?.phone ?? ""} />
-        </div>
-        <div className="space-y-1">
-          <Label>{t.email}</Label>
-          <Input name="email" type="email" dir="ltr" defaultValue={edit?.email ?? ""} />
         </div>
         <div className="space-y-1">
           <Label>{t.creditLimit}</Label>

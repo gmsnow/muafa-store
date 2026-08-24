@@ -17,7 +17,7 @@ export interface RoleOpt { id: string; name: string; nameAr: string | null }
 
 export interface EditableUser {
   id: string; username: string; fullName: string; fullNameAr: string | null;
-  email: string | null; phone: string | null; roleId: string; status: string;
+  phone: string | null; roleId: string; status: string;
 }
 
 export function UserDialog({
@@ -83,10 +83,6 @@ export function UserDialog({
             <div className="col-span-2 space-y-1.5">
               <Label>{t.usersPage.fullName}</Label>
               <VoiceInput name="fullNameAr" dir="rtl" defaultValue={editUser?.fullNameAr ?? editUser?.fullName ?? ""} required maxLength={150} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input name="email" type="email" defaultValue={editUser?.email ?? ""} dir="ltr" />
             </div>
             <div className="space-y-1.5">
               <Label>{t.common.phone}</Label>

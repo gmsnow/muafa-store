@@ -59,7 +59,7 @@ export default async function UsersPage() {
                         roles={roleOpts}
                         user={{
                           id: u.id, username: u.username, fullName: u.fullName,
-                          fullNameAr: u.fullNameAr, email: u.email, phone: u.phone,
+                          fullNameAr: u.fullNameAr, phone: u.phone,
                           roleId: u.roleId, status: u.status, roleName: u.role.name,
                         }}
                       />

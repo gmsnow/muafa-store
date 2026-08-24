@@ -63,7 +63,7 @@ export function StoreSettingsForm({
   t: Dictionary;
   data: {
     name: string; nameAr: string | null; logoUrl: string | null; address: string | null;
-    addressAr: string | null; phone: string | null; email: string | null;
+    addressAr: string | null; phone: string | null;
     currencyCode: string; currencySymbol: string; receiptFooter: string | null;
   };
 }) {
@@ -84,7 +84,6 @@ export function StoreSettingsForm({
           <Field label={s.storeNameAr}><VoiceInput name="nameAr" dir="rtl" defaultValue={data.nameAr ?? data.name ?? ""} required maxLength={150} /></Field>
           <Field label={s.logoUrl}><Input name="logoUrl" defaultValue={data.logoUrl ?? ""} dir="ltr" placeholder="https://…" /></Field>
           <Field label={t.common.phone}><Input name="phone" defaultValue={data.phone ?? ""} dir="ltr" maxLength={30} /></Field>
-          <Field label="Email"><Input name="email" type="email" defaultValue={data.email ?? ""} dir="ltr" maxLength={150} /></Field>
           <div className="sm:col-span-2"><Field label={t.common.address}><VoiceInput name="addressAr" dir="rtl" defaultValue={data.addressAr ?? data.address ?? ""} maxLength={300} /></Field></div>
           <Field label={s.currency}><Input name="currencyCode" defaultValue={data.currencyCode} required maxLength={8} dir="ltr" /></Field>
           <Field label={s.currencySymbol}><Input name="currencySymbol" defaultValue={data.currencySymbol} required maxLength={8} /></Field>

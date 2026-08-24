@@ -13,7 +13,6 @@ export default async function StoreSettingsPage() {
         data={{
           name: data.name, nameAr: data.nameAr, logoUrl: data.logoUrl,
           address: data.address, addressAr: data.addressAr, phone: data.phone,
-          email: data.email,
           currencyCode: data.currencyCode, currencySymbol: data.currencySymbol,
           receiptFooter: data.receiptFooter,
         }}

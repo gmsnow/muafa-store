@@ -59,7 +59,7 @@ export async function supplierEditAction(id: string) {
     const s = await getSupplierForEdit(id);
     return ok({
       id: s.id, name: s.name, nameAr: s.nameAr, company: s.company,
-      phone: s.phone, email: s.email, address: s.address,
+      phone: s.phone, address: s.address,
       creditLimit: String(s.creditLimit), paymentTerms: s.paymentTerms, notes: s.notes,
       isActive: s.isActive,
     });

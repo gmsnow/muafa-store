@@ -123,7 +123,11 @@ export function VoiceDictation({ aiMode = false }: { aiMode?: boolean }) {
       return;
     }
     const mimeType = pickMimeType();
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const recorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      // Higher opus bitrate keeps consonants of Arabic names intact.
+      audioBitsPerSecond: 64_000,
+    });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
     recorder.onstop = async () => {

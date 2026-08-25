@@ -59,7 +59,7 @@ export async function createBackup(actor: AuthUser, note?: string) {
     const conn = parseDatabaseUrl(dbUrl);
     const exitCode = await new Promise<number>((resolve) => {
       const child = spawn(
-        resolvePgDump(),
+        resolvePgDump(), /*turbopackIgnore: true*/
         ["--host", conn.host, "--port", conn.port, "--username", conn.user,
          "--no-owner", "--no-privileges", "--format=plain", "--file", filePath, conn.database],
         { env: { ...process.env, PGPASSWORD: conn.password }, windowsHide: true },
@@ -98,8 +98,8 @@ export async function getBackupFilePath(id: string): Promise<{ filePath: string;
   const rec = await db.backupRecord.findUnique({ where: { id } });
   if (!rec || rec.status !== "COMPLETED") throw new AppError("NOT_FOUND", "Backup not found");
   const safe = path.basename(rec.filename);
-  const filePath = path.join(BACKUP_DIR, safe);
-  await stat(filePath).catch(() => {
+  const filePath = path.join(/*turbopackIgnore: true*/ BACKUP_DIR, safe);
+  await stat(/*turbopackIgnore: true*/ filePath).catch(() => {
     throw new AppError("NOT_FOUND", "Backup file missing on disk");
   });
   return { filePath, filename: safe };
@@ -109,7 +109,7 @@ export async function deleteBackup(id: string) {
   const rec = await db.backupRecord.findUnique({ where: { id } });
   if (!rec) throw new AppError("NOT_FOUND", "Backup not found");
   if (rec.status === "COMPLETED" && rec.filename && rec.filename !== "(in progress)") {
-    await unlink(path.join(BACKUP_DIR, path.basename(rec.filename))).catch(() => {});
+    await unlink(path.join(/*turbopackIgnore: true*/ BACKUP_DIR, path.basename(rec.filename))).catch(() => {});
   }
   await db.backupRecord.delete({ where: { id } });
 }

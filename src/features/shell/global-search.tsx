@@ -51,10 +51,15 @@ export function GlobalSearch({ t }: { t: Dictionary }) {
     }
     timer.current = setTimeout(async () => {
       setBusy(true);
-      const { globalSearchAction } = await import("@/features/search/actions");
-      const res = await globalSearchAction(q);
-      setBusy(false);
-      if (res.ok) setResults(res.data as Results);
+      try {
+        const { globalSearchAction } = await import("@/features/search/actions");
+        const res = await globalSearchAction(q);
+        if (res.ok) setResults(res.data as Results);
+      } catch {
+        setResults(EMPTY);
+      } finally {
+        setBusy(false);
+      }
     }, 250);
   }
 

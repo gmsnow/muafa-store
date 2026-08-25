@@ -79,6 +79,9 @@ function useVoiceInsert() {
         const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
         const form = new FormData();
         form.append("audio", new Blob(chunks, { type }), `speech.${ext}`);
+        // Free-form field (notes/descriptions): disable store-name seeding so
+        // dictation is not polluted with product/customer names.
+        form.append("context", "note");
         const res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
         const data = (await res.json().catch(() => null)) as { text?: string; error?: string } | null;
         if (res.ok && data?.text) insertAtCursor(el, data.text);

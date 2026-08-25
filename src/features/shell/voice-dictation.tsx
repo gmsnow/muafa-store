@@ -141,6 +141,9 @@ export function VoiceDictation({ aiMode = false }: { aiMode?: boolean }) {
         const blob = new Blob(chunks, { type });
         const form = new FormData();
         form.append("audio", blob, `speech.${ext}`);
+        // Global dictation targets arbitrary fields (often product/customer
+        // search), so keep the store-vocabulary bias.
+        form.append("context", "auto");
         const res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
         const data = (await res.json().catch(() => null)) as { text?: string; error?: string } | null;
         if (res.ok && data?.text) applyToTarget(data.text);

@@ -90,7 +90,9 @@ async function refineArabic(
     "قواعد إلزامية:\n" +
     "1) لا تعِد صياغة الجملة ولا تضِف أو تحذِف أي معلومة — انقل كلام المتحدث كما هو.\n" +
     "2) لا تستبدل أي كلمة بكلمة أخرى؛ صحِّح أخطاء الإملاء وفصل الكلمات فقط.\n" +
-    "3) إذا شابهت كلمة مشوّهة اسمًا من قائمة الأسماء فأعِد الاسم كما هو حرفيًا؛ وإلا اترك الكلمة كما نُطقت تمامًا حتى لو بدت غريبة.\n" +
+    (vocabulary
+      ? "3) إذا شابهت كلمة مشوّهة اسمًا من قائمة الأسماء فأعِد الاسم كما هو حرفيًا؛ وإلا اترك الكلمة كما نُطقت تمامًا حتى لو بدت غريبة.\n"
+      : "3) لا تُدرِج أي أسماء أصناف أو أشخاص أو علامات تجارية لم ينطقها المتحدث؛ انقل كلامه حرفيًا ولو بدا غير مكتمل.\n") +
     "4) حوِّل الأعداد المنطوقة كتابةً إلى أرقام غربية فقط (مثال: خمسة عشر ← 15).\n" +
     "5) أعِد النص العربي النهائي فقط، دون أي شرح أو مقدمات أو علامات اقتباس.";
   const system =
@@ -149,9 +151,32 @@ export async function POST(request: NextRequest) {
   const rawLanguage = process.env.CLOUDFLARE_AI_LANGUAGE || "ar";
   const language = /^[a-z]{2,3}$/i.test(rawLanguage.trim()) ? rawLanguage.trim().toLowerCase() : "ar";
 
-  // Whisper's initial_prompt has a hard token budget (~224 tokens), so when we
-  // have real store names we spend it on those instead of generic phrases.
-  const vocabulary = await loadVocabulary();
+  const form = await request.formData();
+  const audio = form.get("audio");
+  if (!(audio instanceof File) || audio.size === 0) {
+    return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
+  }
+  if (audio.size > 20 * 1024 * 1024) {
+    return NextResponse.json({ error: "AUDIO_TOO_LARGE" }, { status: 413 });
+  }
+
+  // context=note → free-form dictation (notes, descriptions): NO store-name
+  // seeding, otherwise Whisper echoes prompt names and the LLM maps words onto
+  // the name list. context=auto (default) keeps vocabulary bias for search-ish
+  // fields where product/customer names are expected.
+  const useNames = form.get("context") !== "note";
+
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(await audio.arrayBuffer());
+  } catch {
+    return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
+  }
+
+  // Store vocabulary (real names from the DB) — only when the caller opts in.
+  const vocabulary = useNames ? await loadVocabulary() : "";
+
+  // Whisper's initial_prompt has a hard token budget (~224 tokens).
   const initialPrompt = process.env.CLOUDFLARE_AI_INITIAL_PROMPT
     ? process.env.CLOUDFLARE_AI_INITIAL_PROMPT
     : vocabulary
@@ -163,24 +188,8 @@ export async function POST(request: NextRequest) {
   const refineEnabled = (process.env.CLOUDFLARE_AI_CORRECT ?? "on").trim().toLowerCase() !== "off";
 
   console.log(
-    `[ai/transcribe] model=${model} language=${language} refine=${refineEnabled ? refineModel : "off"} vocab=${vocabulary ? vocabulary.length : 0}ch`,
+    `[ai/transcribe] model=${model} language=${language} refine=${refineEnabled ? refineModel : "off"} vocab=${vocabulary ? vocabulary.length : 0}ch context=${useNames ? "auto" : "note"}`,
   );
-
-  const form = await request.formData();
-  const audio = form.get("audio");
-  if (!(audio instanceof File) || audio.size === 0) {
-    return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
-  }
-  if (audio.size > 20 * 1024 * 1024) {
-    return NextResponse.json({ error: "AUDIO_TOO_LARGE" }, { status: 413 });
-  }
-
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(await audio.arrayBuffer());
-  } catch {
-    return NextResponse.json({ error: "NO_AUDIO" }, { status: 400 });
-  }
 
   // whisper-large-v3-turbo takes a JSON payload and honours language/task hints;
   // the legacy @cf/openai/whisper only accepts raw audio bytes.

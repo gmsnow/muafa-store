@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Dictionary } from "@/shared/i18n";
 import { recordCustomerTxnAction, adjustLoyaltyAction, saveGroupAction } from "../actions";
+import { enqueue } from "@/shared/offline/outbox";
 
 interface CustomerOpt { id: string; name: string; nameAr: string | null; balance?: string; loyaltyPoints?: string }
 
@@ -39,7 +40,28 @@ export function CustomerTxnDialog({
   async function submit(formData: FormData) {
     setBusy(true);
     const raw = Object.fromEntries(formData.entries());
-    const res = await recordCustomerTxnAction({ ...raw, type });
+    const payload = { ...raw, type };
+
+    // Offline (or request failed): queue locally, replayed automatically later.
+    const saveOffline = async () => {
+      await enqueue("CUSTOMER_TXN", payload);
+      toast.success(tCustomers.offlineSaved);
+      onOpenChange(false);
+    };
+    if (!navigator.onLine) {
+      await saveOffline();
+      setBusy(false);
+      return;
+    }
+
+    let res;
+    try {
+      res = await recordCustomerTxnAction(payload);
+    } catch {
+      await saveOffline();
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     if (res.ok) {
       toast.success(tCustomers.paymentRecorded);

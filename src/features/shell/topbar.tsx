@@ -16,6 +16,7 @@ import { NAV_GROUPS, navLabel } from "./nav-config";
 import { GlobalSearch } from "./global-search";
 import { NotificationsBell, type NotificationItem } from "./notifications-bell";
 import { VoiceDictation } from "./voice-dictation";
+import { OfflineIndicator } from "./offline-indicator";
 
 interface Props {
   t: Dictionary;
@@ -98,6 +99,9 @@ export function Topbar({ t, userName, roleName, permissions, notifications, stor
       </div>
 
       <div className="ms-auto flex items-center gap-1">
+
+        {/* Offline state + pending sync queue */}
+        <OfflineIndicator t={t} />
 
         {/* Voice input — Cloudflare AI (Whisper) when configured, Web Speech otherwise */}
         <VoiceDictation aiMode={aiVoice} />

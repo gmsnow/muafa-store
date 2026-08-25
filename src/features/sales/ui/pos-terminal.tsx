@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Minus, Plus, Printer, Search, Trash2 } from "lucide-react";
+import { Loader2, Minus, Plus, Printer, Search, Trash2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import type { Dictionary } from "@/shared/i18n";
 import { formatMoney } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import { checkoutAction } from "../actions";
+import { enqueue, putCache, getCache } from "@/shared/offline/outbox";
 
 interface PosProduct {
   id: string;
@@ -53,6 +54,7 @@ interface CheckoutResult {
   changeDue: number;
   credit: number;
   pointsEarned: number;
+  offline?: boolean;
 }
 
 type PayMethod = "CASH" | "CARD" | "BANK_TRANSFER" | "WALLET" | "CREDIT";
@@ -76,19 +78,53 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
   const [paidAmount, setPaidAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<CheckoutResult | null>(null);
+  const [offline, setOffline] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const s = t.sales;
 
-  // Debounced product search (server action).
+  // Snapshot products/customers into IndexedDB so offline sessions can still
+  // browse the catalog and pick customers from the last known data.
+  useEffect(() => {
+    void putCache("pos-products", products);
+    void putCache("pos-customers", customers);
+    setOffline(!navigator.onLine);
+    const up = () => setOnlineState(true);
+    const down = () => setOnlineState(false);
+    function setOnlineState(v: boolean) { setOffline(!v); }
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, [products, customers]);
+
+  // Debounced product search — server action online, local snapshot offline.
   useEffect(() => {
     const handle = setTimeout(async () => {
+      if (!navigator.onLine) {
+        const q = query.trim().toLowerCase();
+        const pool = (await getCache<PosProduct[]>("pos-products")) ?? products;
+        const filtered = !q
+          ? pool.slice(0, 12)
+          : pool
+              .filter((p) =>
+                p.name.toLowerCase().includes(q) ||
+                (p.nameAr ?? "").toLowerCase().includes(q) ||
+                p.sku.toLowerCase().includes(q) ||
+                (p.barcode ?? "").includes(q))
+              .slice(0, 12);
+        setResults(filtered);
+        return;
+      }
       const { posSearchAction } = await import("../actions");
       const res = await posSearchAction(query);
       if (res.ok) setResults(res.data as PosProduct[]);
     }, 250);
     return () => clearTimeout(handle);
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, offline]);
 
   const totals = useMemo(() => {
     const subtotal = cart.reduce((a, l) => a + D(l.qty).mul(D(l.sellingPrice)).minus(D(l.discount)).toNumber(), 0);
@@ -115,6 +151,18 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
     e.preventDefault();
     const code = query.trim();
     if (!code) return;
+    if (!navigator.onLine) {
+      const pool = (await getCache<PosProduct[]>("pos-products")) ?? products;
+      const q = code.toLowerCase();
+      const hit =
+        pool.find((p) => (p.barcode ?? "") === code) ??
+        pool.find((p) => p.sku.toLowerCase() === q) ??
+        pool.find((p) => p.nameAr?.toLowerCase() === q || p.name.toLowerCase() === q);
+      if (hit) addToCart(hit);
+      setQuery("");
+      searchRef.current?.focus();
+      return;
+    }
     const { barcodeLookupAction, posSearchAction } = await import("../actions");
     const res = await barcodeLookupAction(code);
     if (res.ok && res.data.productId) {
@@ -156,14 +204,47 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
     if (payMethod !== "CREDIT") {
       payments.push({ method: payMethod, amount: Math.min(paid, totals.total) });
     }
-    const res = await checkoutAction({
+    const payload = {
       items: cart.map((l) => ({ productId: l.id, quantity: l.qty, discount: l.discount || undefined })),
       customerId,
       invoiceDiscount: Number(invoiceDiscount) || 0,
       payments: totals.creditTotal > 0
         ? [...payments, { method: "CREDIT" as const, amount: totals.creditTotal }]
         : payments,
-    });
+    };
+
+    // Offline (or request failed): queue locally and confirm with a temp receipt.
+    const saveOffline = async () => {
+      await enqueue("SALE", payload);
+      setReceipt({
+        saleId: "",
+        invoiceNumber: `OFF-${String(Date.now()).slice(-6)}`,
+        total: totals.total,
+        paid: Math.min(paid, totals.total),
+        changeDue: 0,
+        credit: totals.creditTotal,
+        pointsEarned: 0,
+        offline: true,
+      });
+      setCart([]);
+      setPaidAmount("");
+      setInvoiceDiscount("");
+      toast.success(s.offlineQueued);
+    };
+    if (!navigator.onLine) {
+      await saveOffline();
+      setBusy(false);
+      return;
+    }
+
+    let res;
+    try {
+      res = await checkoutAction(payload);
+    } catch {
+      await saveOffline();
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     if (res.ok) {
       setReceipt(res.data as CheckoutResult);
@@ -179,6 +260,12 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
 
   return (
     <div className="grid gap-4 lg:grid-cols-5">
+      {offline && (
+        <div className="col-span-full flex items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+          <WifiOff className="size-4 shrink-0" />
+          {s.offlineBanner}
+        </div>
+      )}
       {/* Product search + results */}
       <div className="space-y-3 lg:col-span-3">
         <div className="relative">
@@ -387,7 +474,11 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
       <Dialog open={!!receipt} onOpenChange={(v) => !v && setReceipt(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{s.saleCompleted.replace("{invoice}", receipt?.invoiceNumber ?? "")}</DialogTitle>
+            <DialogTitle>
+              {receipt?.offline
+                ? s.offlineQueuedTitle.replace("{invoice}", receipt.invoiceNumber)
+                : s.saleCompleted.replace("{invoice}", receipt?.invoiceNumber ?? "")}
+            </DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-1 pt-2 text-sm">
                 <Row label={s.grandTotal} value={formatMoney(receipt?.total ?? 0, locale)} />
@@ -398,9 +489,11 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <a href={`/sales/receipt/${receipt?.saleId ?? ""}`} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm"><Printer className="size-4" /> {s.printInvoice}</Button>
-            </a>
+            {!receipt?.offline && (
+              <a href={`/sales/receipt/${receipt?.saleId ?? ""}`} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm"><Printer className="size-4" /> {s.printInvoice}</Button>
+              </a>
+            )}
             <Button size="sm" onClick={() => { setReceipt(null); searchRef.current?.focus(); }}>
               {s.newSale}
             </Button>

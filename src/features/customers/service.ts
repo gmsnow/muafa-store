@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
+import { notify } from "@/features/notifications/service";
 import { D, money } from "@/shared/core/money";
 import {
   customerSchema, customerGroupSchema, customerTxnSchema, loyaltyAdjustSchema,
@@ -127,7 +128,7 @@ export async function deleteGroup(id: string) {
 
 export async function recordCustomerTxn(userId: string, raw: unknown) {
   const input = customerTxnSchema.parse(raw);
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, deletedAt: null } });
     if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
 
@@ -167,8 +168,20 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
     await import("@/shared/core/audit").then(({ recordAudit }) =>
       recordAudit(tx, { userId, action: `CUSTOMER_${input.type}`, entityType: "CustomerTransaction", entityId: txn.id }),
     );
-    return { balanceAfter: delta.toString() };
+    return {
+      balanceAfter: delta.toString(),
+      customerName: customer.name,
+      customerNameAr: customer.nameAr ?? null,
+      txnType: input.type,
+      amount: money(input.amount).toString(),
+    };
   });
+  void notify({
+    type: "CUSTOMER_PAYMENT", title: "CUSTOMER_PAYMENT",
+    body: `${result.customerNameAr ?? result.customerName} · ${result.txnType} · ${result.amount}`,
+    entityType: "Customer", entityId: input.customerId, href: "/customers/transactions",
+  });
+  return { balanceAfter: result.balanceAfter };
 }
 
 function txnSearchWhere(q?: string): Prisma.CustomerTransactionWhereInput | undefined {
@@ -308,9 +321,85 @@ export async function deleteCustomerTxnsByMonth(
   });
 }
 
+/**
+ * Recompute the running balanceAfter of every transaction for a customer
+ * (PAYMENT subtracts, everything else adds) and sync customer.balance.
+ * Used after a single-row edit/delete so statements stay accurate.
+ */
+async function recomputeCustomerLedger(tx: Prisma.TransactionClient, customerId: string) {
+  const txns = await tx.customerTransaction.findMany({
+    where: { customerId },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, type: true, amount: true, balanceAfter: true },
+  });
+  let bal = D(0);
+  for (const t of txns) {
+    const amt = D(t.amount);
+    bal = bal.plus(t.type === "PAYMENT" ? amt.negated() : amt);
+    if (!bal.eq(D(t.balanceAfter))) {
+      await tx.customerTransaction.update({
+        where: { id: t.id },
+        data: { balanceAfter: bal.toString() },
+      });
+    }
+  }
+  await tx.customer.update({ where: { id: customerId }, data: { balance: bal.toString() } });
+  return bal;
+}
+
+export async function updateCustomerTxn(
+  userId: string,
+  input: { id: string; amount: number; note?: string },
+) {
+  if (!(input.amount > 0)) throw new AppError("VALIDATION_ERROR", "Amount must be positive");
+  return db.$transaction(async (tx) => {
+    const existing = await tx.customerTransaction.findUnique({ where: { id: input.id } });
+    if (!existing) throw new AppError("NOT_FOUND", "Transaction not found");
+
+    // Preserve the stored sign convention (REFUND rows are negative).
+    const signed = D(existing.amount);
+    const newAmount = signed.lt(0) ? money(input.amount).negated() : money(input.amount);
+    await tx.customerTransaction.update({
+      where: { id: existing.id },
+      data: { amount: newAmount.toString(), note: input.note?.trim() || null },
+    });
+
+    const balance = await recomputeCustomerLedger(tx, existing.customerId);
+    const customer = await tx.customer.findUnique({ where: { id: existing.customerId } });
+    if (customer && D(customer.creditLimit).gt(0) && balance.gt(D(customer.creditLimit))) {
+      throw new AppError("CREDIT_LIMIT_EXCEEDED", "Credit limit exceeded");
+    }
+
+    await import("@/shared/core/audit").then(({ recordAudit }) =>
+      recordAudit(tx, {
+        userId, action: "CUSTOMER_TXN_UPDATE", entityType: "CustomerTransaction", entityId: existing.id,
+        oldValues: { amount: existing.amount, note: existing.note },
+        newValues: { amount: newAmount.toString(), note: input.note ?? null },
+      }),
+    );
+    return { balanceAfter: balance.toString() };
+  });
+}
+
+export async function deleteCustomerTxn(userId: string, id: string) {
+  return db.$transaction(async (tx) => {
+    const existing = await tx.customerTransaction.findUnique({ where: { id } });
+    if (!existing) throw new AppError("NOT_FOUND", "Transaction not found");
+    await tx.customerTransaction.delete({ where: { id } });
+    const balance = await recomputeCustomerLedger(tx, existing.customerId);
+
+    await import("@/shared/core/audit").then(({ recordAudit }) =>
+      recordAudit(tx, {
+        userId, action: "CUSTOMER_TXN_DELETE", entityType: "CustomerTransaction", entityId: id,
+        oldValues: { type: existing.type, amount: existing.amount, note: existing.note },
+      }),
+    );
+    return { balanceAfter: balance.toString() };
+  });
+}
+
 export async function getCustomerById(id: string) {
-  return db.customer.findFirst({
-    where: { id, deletedAt: null },
+  return db.customer.findFirst({    where: { id, deletedAt: null },
     select: { id: true, code: true, name: true, nameAr: true, balance: true },
   });
 }

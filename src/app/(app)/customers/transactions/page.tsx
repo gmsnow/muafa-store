@@ -17,6 +17,7 @@ import { deleteCustomerTxnsMonthAction } from "@/features/customers/actions";
 import { VoiceInput } from "@/components/voice-input";
 import { Button } from "@/components/ui/button";
 import { DeleteMonthButton } from "./delete-month-button";
+import { TxnRowActions } from "./txn-row-actions";
 import { CustomerLauncher } from "../list/customer-launcher";
 
 export default async function CustomerTransactionsPage({
@@ -113,6 +114,7 @@ export default async function CustomerTransactionsPage({
                 <TableHead className="text-end">{t.customers.paymentAmount}</TableHead>
                 <TableHead className="text-end">{t.customers.balanceAfter}</TableHead>
                 <TableHead>{t.common.notes}</TableHead>
+                <TableHead className="w-20 text-end">{t.common.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -140,10 +142,16 @@ export default async function CustomerTransactionsPage({
                     {formatMoney(D(tx.balanceAfter).toNumber(), locale)}
                   </TableCell>
                   <TableCell className="max-w-40 truncate text-sm">{tx.note}</TableCell>
+                  <TableCell className="text-end">
+                    <TxnRowActions
+                      txn={{ id: tx.id, type: tx.type, amount: String(tx.amount), note: tx.note }}
+                      tCommon={t.common} tCustomers={t.customers} tErrors={t.errors}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
               {rows.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

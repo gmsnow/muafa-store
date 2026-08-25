@@ -7,6 +7,7 @@ import {
   listGroups, saveGroup, deleteGroup,
   recordCustomerTxn, listCustomerTransactions, getStatement,
   adjustLoyalty, deleteCustomerTxnsByMonth,
+  updateCustomerTxn, deleteCustomerTxn,
 } from "./service";
 
 export async function saveCustomerAction(id: string | null, raw: unknown) {
@@ -71,6 +72,20 @@ export async function deleteCustomerTxnsMonthAction(raw: { month: string; custom
   return guard(async () => {
     const user = await requirePermission("customers.credit");
     return ok(await deleteCustomerTxnsByMonth(user.id, raw));
+  });
+}
+
+export async function updateCustomerTxnAction(raw: { id: string; amount: number; note?: string }) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await updateCustomerTxn(user.id, raw));
+  });
+}
+
+export async function deleteCustomerTxnAction(id: string) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await deleteCustomerTxn(user.id, id));
   });
 }
 

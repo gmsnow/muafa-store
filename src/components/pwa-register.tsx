@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { toast } from "sonner";
 
 /**
  * Registers the service worker that backs PWA install + offline support.
@@ -10,6 +11,16 @@ import { useEffect } from "react";
 export function PwaRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+
+    // Friendly message for any write operation attempted offline that is not
+    // covered by the outbox (sales / customer txns queue themselves).
+    const onUnhandledRejection = (e: PromiseRejectionEvent) => {
+      if (!navigator.onLine) {
+        e.preventDefault();
+        toast.error("لا يوجد اتصال — هذه العملية تحتاج إنترنت وستتاح عند عودته");
+      }
+    };
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
 
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
@@ -26,6 +37,7 @@ export function PwaRegister() {
     });
 
     return () => {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
     };
   }, []);

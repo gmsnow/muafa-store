@@ -2,6 +2,7 @@
 import Decimal from "decimal.js";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
+import { notify } from "@/features/notifications/service";
 import { D, money, qty as q3 } from "@/shared/core/money";
 import {
   supplierSchema, purchaseOrderSchema, receiveSchema, payPurchaseSchema,
@@ -274,6 +275,11 @@ export async function createPurchaseOrder(userId: string, raw: unknown) {
   await import("@/shared/core/audit").then(({ recordAudit }) =>
     recordAudit(db, { userId, action: "PURCHASE_ORDER_CREATE", entityType: "PurchaseOrder", entityId: po.id }),
   );
+  void notify({
+    type: "PURCHASE_ORDER", title: "PURCHASE_ORDER",
+    body: `${po.poNumber} · PENDING`,
+    entityType: "PurchaseOrder", entityId: po.id, href: "/procurement/purchase-orders",
+  });
   return po;
 }
 
@@ -309,6 +315,11 @@ export async function transitionPo(userId: string, poId: string, action: "submit
   await import("@/shared/core/audit").then(({ recordAudit }) =>
     recordAudit(db, { userId, action: `PURCHASE_ORDER_${action.toUpperCase()}`, entityType: "PurchaseOrder", entityId: poId }),
   );
+  void notify({
+    type: "PURCHASE_ORDER", title: "PURCHASE_ORDER",
+    body: `${po.poNumber} · ${po.status}`,
+    entityType: "PurchaseOrder", entityId: poId, href: "/procurement/purchase-orders",
+  });
   return po;
 }
 
@@ -324,7 +335,7 @@ export async function receivePurchase(userId: string, raw: unknown) {
     throw new AppError("VALIDATION_ERROR", "No items");
   }
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const supplier = await tx.supplier.findFirst({
       where: { id: input.supplierId, deletedAt: null },
     });
@@ -514,6 +525,12 @@ export async function receivePurchase(userId: string, raw: unknown) {
       due: due.toNumber(),
     };
   });
+  void notify({
+    type: "GOODS_RECEIVED", title: "GOODS_RECEIVED",
+    body: `${result.purchaseNumber} · ${result.total}`,
+    entityType: "Purchase", entityId: result.purchaseId, href: "/procurement/receiving",
+  });
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +539,7 @@ export async function receivePurchase(userId: string, raw: unknown) {
 
 export async function payPurchase(userId: string, raw: unknown) {
   const input = payPurchaseSchema.parse(raw);
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const purchase = await tx.purchase.findUnique({ where: { id: input.purchaseId } });
     if (!purchase) throw new AppError("NOT_FOUND", "Purchase not found");
     if (D(input.amount).gt(purchase.dueAmount)) {
@@ -542,8 +559,14 @@ export async function payPurchase(userId: string, raw: unknown) {
     await import("@/shared/core/audit").then(({ recordAudit }) =>
       recordAudit(tx, { userId, action: "PURCHASE_PAY", entityType: "Purchase", entityId: purchase.id }),
     );
-    return { paidAmount: updated.paidAmount.toString(), dueAmount: updated.dueAmount.toString() };
+    return { paidAmount: updated.paidAmount.toString(), dueAmount: updated.dueAmount.toString(), purchaseNumber: purchase.purchaseNumber };
   });
+  void notify({
+    type: "SUPPLIER_PAYMENT", title: "SUPPLIER_PAYMENT",
+    body: `${result.purchaseNumber} · ${input.amount}`,
+    entityType: "Purchase", entityId: input.purchaseId, href: "/procurement/purchases",
+  });
+  return { paidAmount: result.paidAmount, dueAmount: result.dueAmount };
 }
 
 // ---------------------------------------------------------------------------
@@ -685,7 +708,7 @@ export async function listPurchaseReturns(opts: { q?: string; page?: number; pag
 export async function createPurchaseReturn(userId: string, raw: unknown) {
   const input = purchaseReturnSchema.parse(raw);
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const purchase = await tx.purchase.findUnique({
       where: { id: input.purchaseId },
       include: {
@@ -848,4 +871,10 @@ export async function createPurchaseReturn(userId: string, raw: unknown) {
       refundMethod: input.refundMethod,
     };
   });
+  void notify({
+    type: "PURCHASE_RETURN", title: "PURCHASE_RETURN",
+    body: `${result.returnNumber} · ${result.total}`,
+    entityType: "PurchaseReturn", entityId: result.returnId, href: "/procurement/returns",
+  });
+  return result;
 }

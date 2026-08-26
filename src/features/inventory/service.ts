@@ -2,6 +2,7 @@ import "server-only";
 import Decimal from "decimal.js";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
+import { notify } from "@/features/notifications/service";
 import { D, money, qty as q3 } from "@/shared/core/money";
 import {
   categorySchema, brandSchema, unitSchema, conversionSchema, cleanProduct,
@@ -833,6 +834,11 @@ export async function createAdjustment(
       userId, action: "STOCK_ADJUSTMENT", entityType: "StockAdjustment",
       entityId: result.adjustmentNumber,
       newValues: { reason: input.reason, type: input.type, quantity: input.quantity },
+    });
+    void notify({
+      type: "STOCK_ADJUSTMENT", title: "STOCK_ADJUSTMENT",
+      body: `${result.adjustmentNumber} · ${input.type} · ${input.quantity}`,
+      entityType: "StockAdjustment", entityId: result.adjustmentNumber, href: "/inventory/stock",
     });
     return result;
   });

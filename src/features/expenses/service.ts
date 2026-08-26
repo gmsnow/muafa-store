@@ -1,6 +1,7 @@
 ﻿import "server-only";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
+import { notify } from "@/features/notifications/service";
 import { money } from "@/shared/core/money";
 import { expenseSchema, expenseCategorySchema, type ExpenseInput } from "./schema";
 import { Prisma } from "@/generated/prisma/client";
@@ -50,7 +51,7 @@ export async function saveExpense(userId: string, raw: unknown) {
   const category = await db.expenseCategory.findUnique({ where: { id: data.categoryId } });
   if (!category) throw new AppError("VALIDATION_ERROR", "Unknown expense category");
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const seq = await tx.expense.count();
     const expense = await tx.expense.create({
       data: {
@@ -70,6 +71,12 @@ export async function saveExpense(userId: string, raw: unknown) {
     });
     return expense;
   });
+  void notify({
+    type: "EXPENSE", title: "EXPENSE",
+    body: `${result.expenseNumber} · ${result.amount} · ${category.name}`,
+    entityType: "Expense", entityId: result.id, href: "/expenses",
+  });
+  return result;
 }
 
 /** Expenses are financial records — delete is restricted to same-day voids. */
@@ -81,6 +88,11 @@ export async function deleteExpense(id: string) {
     throw new AppError("VALIDATION_ERROR", "Only expenses recorded in the last 24h can be deleted");
   }
   await db.expense.delete({ where: { id } });
+  void notify({
+    type: "EXPENSE", title: "EXPENSE",
+    body: `${e.expenseNumber} · VOID · ${e.amount}`,
+    entityType: "Expense", entityId: id, href: "/expenses",
+  });
 }
 
 export async function listCategories() {

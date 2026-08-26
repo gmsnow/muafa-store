@@ -20,8 +20,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     syncNotifications(),
   ]);
   const notifications = notificationRows.map((n) => ({
-    id: n.id, type: n.type, body: n.body ?? "", isRead: n.isRead,
-    createdAt: n.createdAt.toISOString(),
+    id: n.id, type: n.type, body: n.body ?? "", href: n.href,
+    isRead: n.isRead, createdAt: n.createdAt.toISOString(),
   }));
   const aiVoice = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
 

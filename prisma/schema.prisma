@@ -107,6 +107,16 @@ enum NotificationType {
   EXPIRED
   PENDING_PO
   CREDIT_LIMIT
+  SALE
+  SALE_CANCELLED
+  SALE_RETURN
+  PURCHASE_ORDER
+  GOODS_RECEIVED
+  PURCHASE_RETURN
+  SUPPLIER_PAYMENT
+  STOCK_ADJUSTMENT
+  EXPENSE
+  CUSTOMER_PAYMENT
   FAILED_OPERATION
   SYSTEM
 
@@ -968,6 +978,7 @@ model Notification {
   type       NotificationType
   title      String
   body       String?
+  href       String?
   entityType String?
   entityId   String?
   isRead     Boolean          @default(false)

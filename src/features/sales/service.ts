@@ -2,6 +2,7 @@ import "server-only";
 import Decimal from "decimal.js";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
+import { notify } from "@/features/notifications/service";
 import { D, money, lineTotal, sum, qty as q3 } from "@/shared/core/money";
 import {
   checkoutSchema, saleReturnSchema,
@@ -338,6 +339,11 @@ export async function createSale(userId: string, raw: unknown) {
       userId, action: "SALE_CREATE", entityType: "Sale", entityId: result.saleId,
       newValues: { invoice: result.invoiceNumber, total: result.total },
     });
+    void notify({
+      type: "SALE", title: "SALE",
+      body: `${result.invoiceNumber} · ${result.total}`,
+      entityType: "Sale", entityId: result.saleId, href: `/sales/receipt/${result.saleId}`,
+    });
     return result;
   });
 }
@@ -449,6 +455,11 @@ export async function cancelSale(userId: string, saleId: string) {
   }, { isolationLevel: "Serializable", timeout: 15000 }).then(async (result) => {
     const { recordAudit } = await import("@/shared/core/audit");
     await recordAudit(db, { userId, action: "SALE_CANCEL", entityType: "Sale", entityId: saleId });
+    void notify({
+      type: "SALE_CANCELLED", title: "SALE_CANCELLED",
+      body: result.invoiceNumber,
+      entityType: "Sale", entityId: saleId, href: "/sales/orders",
+    });
     return result;
   });
 }
@@ -631,6 +642,11 @@ export async function createSaleReturn(userId: string, raw: unknown) {
     await recordAudit(db, {
       userId, action: "SALE_RETURN", entityType: "SaleReturn", entityId: result.returnNumber,
       newValues: { saleId: input.saleId, total: result.total },
+    });
+    void notify({
+      type: "SALE_RETURN", title: "SALE_RETURN",
+      body: `${result.returnNumber} · ${result.total}`,
+      entityType: "SaleReturn", entityId: input.saleId, href: "/sales/orders",
     });
     return result;
   });

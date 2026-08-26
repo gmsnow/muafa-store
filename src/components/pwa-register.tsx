@@ -32,9 +32,9 @@ export function PwaRegister() {
       }
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Non-fatal: app works normally without the SW.
-    });
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      reg.update().catch(() => {});
+    }).catch(() => {});
 
     return () => {
       window.removeEventListener("unhandledrejection", onUnhandledRejection);

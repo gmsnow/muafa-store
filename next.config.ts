@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       {
         // Service worker updates must never be served stale by the browser.
         source: "/sw.js",
-        headers: [{ key: "Cache-Control", value: "no-cache" }],
+        headers: [{ key: "Cache-Control", value: "no-store, no-cache, must-revalidate" }],
       },
       {
         source: "/:path*",

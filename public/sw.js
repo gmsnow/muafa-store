@@ -1,18 +1,19 @@
 /**
  * Grocery PWA service worker.
  * - Cache-first for hashed /_next/static/ build assets (immutable).
- * - Every visited page + its RSC payloads are cached network-first, so the
- *   whole app stays browsable offline (last-seen snapshot of each page).
- * - Auth/login/api pages are never cached. Queued mutations (POS sales,
- *   customer payments/debts) replay through the app's IndexedDB outbox when
- *   connectivity returns.
+ * - RSC payloads are cached network-first so client-side navigation
+ *   (router.push) keeps working offline.
+ * - Full page HTML is NEVER cached — Next.js error pages return HTTP 200
+ *   (error boundary is client-side), so caching navigations captures stale
+ *   error screens. Offline direct navigation shows a friendly fallback
+ *   instead; offline client-side navigation works via the RSC cache.
+ * - Queued mutations (POS sales, customer payments/debts) replay through
+ *   the app's IndexedDB outbox when connectivity returns.
  */
-const VERSION = "v5";
+const VERSION = "v6";
 const STATIC_CACHE = `static-${VERSION}`;
-const PAGE_CACHE = `pages-${VERSION}`;
 const DATA_CACHE = `data-${VERSION}`;
 
-// Never cache error pages — only cache successful, non-redirected responses.
 // Never cache these paths (auth screens, APIs, the SW itself).
 const NO_CACHE_PATHS = /^\/(login|forgot|reset|register|api|sw\.js)(\/|$|\?)/;
 
@@ -23,8 +24,9 @@ self.addEventListener("install", () => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      // Purge every cache left by older SW versions.
-      const keep = new Set([STATIC_CACHE, PAGE_CACHE, DATA_CACHE]);
+      // Purge every cache left by older SW versions (including old page caches
+      // from v3-v5 that may contain stale error HTML).
+      const keep = new Set([STATIC_CACHE, DATA_CACHE]);
       for (const key of await caches.keys()) {
         if (!keep.has(key)) await caches.delete(key);
       }
@@ -92,27 +94,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Page navigations: network-first, cached for offline browsing.
-  if (req.mode === "navigate") {
-    event.respondWith(
-      (async () => {
-        try {
-          const res = await fetch(req);
-          // Never cache redirects (e.g. auth bounce to /login) or failures.
-          if (res.ok && !res.redirected) {
-            const cache = await caches.open(PAGE_CACHE);
-            cache.put(req, res.clone());
-          }
-          return res;
-        } catch {
-          const cache = await caches.open(PAGE_CACHE);
-          return (
-            (await cache.match(req)) ||
-            (await cache.match(req, { ignoreSearch: true })) ||
-            offlineScreen()
-          );
-        }
-      })(),
-    );
-  }
+  // Page navigations: network-only. Never cache full HTML to avoid storing
+  // Next.js client-side error boundary pages (which return HTTP 200).
+  // Offline direct navigation shows the fallback screen; client-side
+  // navigation via router.push() works through the RSC cache above.
 });

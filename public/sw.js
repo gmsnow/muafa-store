@@ -7,11 +7,12 @@
  *   customer payments/debts) replay through the app's IndexedDB outbox when
  *   connectivity returns.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const STATIC_CACHE = `static-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 const DATA_CACHE = `data-${VERSION}`;
 
+// Never cache error pages — only cache successful, non-redirected responses.
 // Never cache these paths (auth screens, APIs, the SW itself).
 const NO_CACHE_PATHS = /^\/(login|forgot|reset|register|api|sw\.js)(\/|$|\?)/;
 

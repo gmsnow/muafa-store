@@ -43,3 +43,267 @@ https://react.dev/link/hydration-mismatch
  
  GET /inventory/products 200 in 1402ms (next.js: 233ms, proxy.ts: 205ms, application-code: 964ms)
  GET /reports/tax 200 in 225ms (next.js: 28ms, proxy.ts: 5ms, application-code: 193ms)
+ GET /inventory/products 200 in 236ms (next.js: 7ms, proxy.ts: 6ms, application-code: 223ms)
+ GET /inventory/products 200 in 136ms (next.js: 6ms, proxy.ts: 5ms, application-code: 125ms)
+✓ Compiled in 131ms
+ GET /inventory/products 200 in 685ms (next.js: 118ms, proxy.ts: 36ms, application-code: 531ms)
+ GET /inventory/products 200 in 477ms (next.js: 8ms, proxy.ts: 12ms, application-code: 457ms)
+ GET /inventory/products 200 in 452ms (next.js: 12ms, proxy.ts: 11ms, application-code: 430ms)
+ GET /inventory/products 200 in 472ms (next.js: 26ms, proxy.ts: 55ms, application-code: 391ms)
+ GET /inventory/products 200 in 440ms (next.js: 20ms, proxy.ts: 67ms, application-code: 352ms)
+ GET /inventory/products 200 in 411ms (next.js: 27ms, proxy.ts: 32ms, application-code: 352ms)
+ GET /inventory/products 200 in 412ms (next.js: 18ms, proxy.ts: 30ms, application-code: 364ms)
+ GET /inventory/products 200 in 409ms (next.js: 20ms, proxy.ts: 41ms, application-code: 348ms)
+ GET /inventory/products 200 in 374ms (next.js: 15ms, proxy.ts: 35ms, application-code: 324ms)
+ GET /inventory/products 200 in 367ms (next.js: 28ms, proxy.ts: 35ms, application-code: 305ms)
+ GET /inventory/products 200 in 343ms (next.js: 16ms, proxy.ts: 28ms, application-code: 300ms)
+ GET /inventory/products 200 in 342ms (next.js: 24ms, proxy.ts: 26ms, application-code: 292ms)
+ GET /inventory/products 200 in 336ms (next.js: 16ms, proxy.ts: 34ms, application-code: 286ms)
+ GET /inventory/products 200 in 329ms (next.js: 23ms, proxy.ts: 27ms, application-code: 279ms)
+ GET /inventory/products 200 in 322ms (next.js: 17ms, proxy.ts: 23ms, application-code: 282ms)
+ GET /inventory/products 200 in 317ms (next.js: 12ms, proxy.ts: 26ms, application-code: 279ms)
+ GET /inventory/products 200 in 316ms (next.js: 18ms, proxy.ts: 24ms, application-code: 274ms)
+ GET /inventory/products 200 in 322ms (next.js: 22ms, proxy.ts: 24ms, application-code: 276ms)
+ GET /inventory/products 200 in 323ms (next.js: 13ms, proxy.ts: 24ms, application-code: 285ms)
+ GET /inventory/products 200 in 317ms (next.js: 13ms, proxy.ts: 26ms, application-code: 277ms)
+ GET /inventory/products 200 in 311ms (next.js: 12ms, proxy.ts: 28ms, application-code: 271ms)
+ GET /inventory/products 200 in 324ms (next.js: 21ms, proxy.ts: 23ms, application-code: 280ms)
+ GET /inventory/products 200 in 342ms (next.js: 19ms, proxy.ts: 25ms, application-code: 299ms)
+ GET /inventory/products 200 in 356ms (next.js: 16ms, proxy.ts: 20ms, application-code: 319ms)
+ GET /inventory/products 200 in 405ms (next.js: 15ms, proxy.ts: 29ms, application-code: 362ms)
+ GET /inventory/products 200 in 400ms (next.js: 21ms, proxy.ts: 33ms, application-code: 345ms)
+ GET /inventory/products 200 in 390ms (next.js: 19ms, proxy.ts: 27ms, application-code: 344ms)
+ GET /inventory/products 200 in 347ms (next.js: 25ms, proxy.ts: 30ms, application-code: 292ms)
+ GET /inventory/products 200 in 339ms (next.js: 13ms, proxy.ts: 29ms, application-code: 297ms)
+ GET /inventory/products 200 in 337ms (next.js: 21ms, proxy.ts: 26ms, application-code: 290ms)
+ GET /inventory/products 200 in 340ms (next.js: 21ms, proxy.ts: 24ms, application-code: 295ms)
+ GET /inventory/products 200 in 333ms (next.js: 15ms, proxy.ts: 26ms, application-code: 292ms)
+ GET /inventory/products 200 in 320ms (next.js: 16ms, proxy.ts: 24ms, application-code: 281ms)
+ GET /inventory/products 200 in 314ms (next.js: 12ms, proxy.ts: 28ms, application-code: 274ms)
+ GET /inventory/products 200 in 310ms (next.js: 15ms, proxy.ts: 27ms, application-code: 268ms)
+ GET /inventory/products 200 in 322ms (next.js: 16ms, proxy.ts: 24ms, application-code: 282ms)
+ GET /inventory/products 200 in 340ms (next.js: 23ms, proxy.ts: 31ms, application-code: 286ms)
+ GET /inventory/products 200 in 373ms (next.js: 18ms, proxy.ts: 23ms, application-code: 331ms)
+ GET /inventory/products 200 in 380ms (next.js: 23ms, proxy.ts: 28ms, application-code: 329ms)
+ GET /inventory/products 200 in 375ms (next.js: 18ms, proxy.ts: 28ms, application-code: 329ms)
+ GET /inventory/products 200 in 369ms (next.js: 14ms, proxy.ts: 33ms, application-code: 322ms)
+ GET /inventory/products 200 in 356ms (next.js: 15ms, proxy.ts: 24ms, application-code: 317ms)
+ GET /inventory/products 200 in 360ms (next.js: 13ms, proxy.ts: 29ms, application-code: 317ms)
+ GET /inventory/products 200 in 360ms (next.js: 27ms, proxy.ts: 32ms, application-code: 302ms)
+ GET /inventory/products 200 in 349ms (next.js: 20ms, proxy.ts: 27ms, application-code: 302ms)
+ GET /inventory/products 200 in 355ms (next.js: 16ms, proxy.ts: 25ms, application-code: 315ms)
+ GET /inventory/products 200 in 360ms (next.js: 22ms, proxy.ts: 29ms, application-code: 309ms)
+ GET /inventory/products 200 in 354ms (next.js: 17ms, proxy.ts: 26ms, application-code: 310ms)
+ GET /inventory/products 200 in 350ms (next.js: 18ms, proxy.ts: 29ms, application-code: 303ms)
+ GET /inventory/products 200 in 350ms (next.js: 18ms, proxy.ts: 29ms, application-code: 303ms)
+ GET /inventory/products 200 in 358ms (next.js: 17ms, proxy.ts: 27ms, application-code: 314ms)
+ GET /inventory/products 200 in 359ms (next.js: 18ms, proxy.ts: 31ms, application-code: 310ms)
+ GET /inventory/products 200 in 350ms (next.js: 23ms, proxy.ts: 28ms, application-code: 299ms)
+ GET /inventory/products 200 in 338ms (next.js: 13ms, proxy.ts: 26ms, application-code: 299ms)
+ GET /inventory/products 200 in 349ms (next.js: 20ms, proxy.ts: 22ms, application-code: 307ms)
+ GET /inventory/products 200 in 345ms (next.js: 18ms, proxy.ts: 26ms, application-code: 301ms)
+ GET /inventory/products 200 in 349ms (next.js: 15ms, proxy.ts: 37ms, application-code: 297ms)
+ GET /inventory/products 200 in 337ms (next.js: 22ms, proxy.ts: 31ms, application-code: 284ms)
+ GET /inventory/products 200 in 325ms (next.js: 18ms, proxy.ts: 25ms, application-code: 282ms)
+ GET /inventory/products 200 in 325ms (next.js: 21ms, proxy.ts: 25ms, application-code: 280ms)
+ GET /inventory/products 200 in 318ms (next.js: 15ms, proxy.ts: 24ms, application-code: 278ms)
+ GET /inventory/products 200 in 317ms (next.js: 13ms, proxy.ts: 20ms, application-code: 284ms)
+ GET /inventory/products 200 in 310ms (next.js: 13ms, proxy.ts: 24ms, application-code: 274ms)
+ GET /inventory/products 200 in 319ms (next.js: 18ms, proxy.ts: 24ms, application-code: 277ms)
+ GET /inventory/products 200 in 312ms (next.js: 16ms, proxy.ts: 28ms, application-code: 268ms)
+ GET /inventory/products 200 in 309ms (next.js: 13ms, proxy.ts: 25ms, application-code: 270ms)
+ GET /inventory/products 200 in 304ms (next.js: 17ms, proxy.ts: 25ms, application-code: 262ms)
+ GET /inventory/products 200 in 300ms (next.js: 12ms, proxy.ts: 23ms, application-code: 266ms)
+ GET /inventory/products 200 in 307ms (next.js: 12ms, proxy.ts: 23ms, application-code: 271ms)
+ GET /inventory/products 200 in 310ms (next.js: 12ms, proxy.ts: 22ms, application-code: 276ms)
+ GET /inventory/products 200 in 319ms (next.js: 13ms, proxy.ts: 26ms, application-code: 280ms)
+ GET /inventory/products 200 in 311ms (next.js: 12ms, proxy.ts: 26ms, application-code: 272ms)
+ GET /inventory/products 200 in 303ms (next.js: 14ms, proxy.ts: 25ms, application-code: 264ms)
+ GET /inventory/products 200 in 308ms (next.js: 18ms, proxy.ts: 22ms, application-code: 267ms)
+ GET /inventory/products 200 in 391ms (next.js: 18ms, proxy.ts: 21ms, application-code: 352ms)
+ GET /inventory/products 200 in 412ms (next.js: 15ms, proxy.ts: 22ms, application-code: 374ms)
+ GET /inventory/products 200 in 422ms (next.js: 18ms, proxy.ts: 26ms, application-code: 379ms)
+ GET /inventory/products 200 in 344ms (next.js: 13ms, proxy.ts: 25ms, application-code: 306ms)
+ GET /inventory/products 200 in 334ms (next.js: 13ms, proxy.ts: 28ms, application-code: 292ms)
+ GET /inventory/products 200 in 309ms (next.js: 14ms, proxy.ts: 28ms, application-code: 268ms)
+ GET /inventory/products 200 in 308ms (next.js: 11ms, proxy.ts: 27ms, application-code: 270ms)
+ GET /inventory/products 200 in 325ms (next.js: 22ms, proxy.ts: 24ms, application-code: 279ms)
+ GET /inventory/products 200 in 315ms (next.js: 14ms, proxy.ts: 18ms, application-code: 284ms)
+ GET /inventory/products 200 in 326ms (next.js: 14ms, proxy.ts: 27ms, application-code: 284ms)
+ GET /inventory/products 200 in 336ms (next.js: 18ms, proxy.ts: 23ms, application-code: 294ms)
+ GET /inventory/products 200 in 350ms (next.js: 12ms, proxy.ts: 20ms, application-code: 318ms)
+ GET /inventory/products 200 in 356ms (next.js: 18ms, proxy.ts: 28ms, application-code: 310ms)
+ GET /inventory/products 200 in 338ms (next.js: 12ms, proxy.ts: 33ms, application-code: 293ms)
+ GET /inventory/products 200 in 340ms (next.js: 22ms, proxy.ts: 26ms, application-code: 291ms)
+ GET /inventory/products 200 in 346ms (next.js: 16ms, proxy.ts: 25ms, application-code: 304ms)
+ GET /inventory/products 200 in 362ms (next.js: 15ms, proxy.ts: 23ms, application-code: 325ms)
+ GET /inventory/products 200 in 373ms (next.js: 13ms, proxy.ts: 28ms, application-code: 332ms)
+ GET /inventory/products 200 in 379ms (next.js: 20ms, proxy.ts: 29ms, application-code: 330ms)
+ GET /inventory/products 200 in 372ms (next.js: 13ms, proxy.ts: 38ms, application-code: 321ms)
+ GET /inventory/products 200 in 363ms (next.js: 30ms, proxy.ts: 27ms, application-code: 307ms)
+ GET /inventory/products 200 in 281ms (next.js: 20ms, proxy.ts: 35ms, application-code: 226ms)
+ GET /inventory/products 200 in 182ms (next.js: 18ms, proxy.ts: 28ms, application-code: 137ms)
+✓ Compiled in 70ms
+✓ Finished writing to filesystem cache in 13.3s
+✓ Compiled in 105ms
+ GET /inventory/products 200 in 362ms (next.js: 39ms, proxy.ts: 43ms, application-code: 281ms)
+ GET /manifest.webmanifest 200 in 491ms (next.js: 451ms, proxy.ts: 11ms, application-code: 29ms)
+⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+▲ Next.js 16.3.2 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.105:3001
+- Environments: .env.local, .env
+✓ Ready in 539ms
+✓ Running next.config.ts took 49ms
+
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/inventory..." notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="ar" dir="rtl" suppressHydrationWarning={true}>
+                          <body
+                            className="cairo_8c9f7167-module__DW49aG__variable geist_mono_8d43a2aa-module__8Li5zG__var..."
+-                           cz-shortcut-listen="true"
+                          >
+                  ...
+ 
+ GET /inventory/products 200 in 1422ms (next.js: 226ms, proxy.ts: 222ms, application-code: 974ms)
+ GET /manifest.webmanifest 200 in 107ms (next.js: 66ms, proxy.ts: 8ms, application-code: 33ms)
+ GET /manifest.webmanifest 200 in 31ms (next.js: 11ms, proxy.ts: 14ms, application-code: 5ms)
+ GET /inventory/products 200 in 367ms (next.js: 3ms, proxy.ts: 6ms, application-code: 357ms)
+✓ Compiled in 96ms
+ GET /inventory/products 200 in 137ms (next.js: 14ms, proxy.ts: 6ms, application-code: 118ms)
+ GET /manifest.webmanifest 200 in 11ms (next.js: 2ms, proxy.ts: 5ms, application-code: 4ms)
+⨯ ./src/generated/prisma/client.ts:20:1
+Error: Module not found: Can't resolve './internal/class'
+  [90m18 |[0m [36mimport[0m * [36mas[0m runtime [36mfrom[0m [32m"@prisma/client/runtime/client"[0m
+  [90m19 |[0m [36mimport[0m * [36mas[0m $Enums [36mfrom[0m [32m"./enums"[0m
+[31m[1m>[0m [90m20 |[0m [36mimport[0m * [36mas[0m $Class [36mfrom[0m [32m"./internal/class"[0m
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m21 |[0m [36mimport[0m * [36mas[0m [33mPrisma[0m [36mfrom[0m [32m"./internal/prismaNamespace"[0m
+  [90m22 |[0m
+  [90m23 |[0m [36mexport[0m * [36mas[0m $Enums [36mfrom[0m [32m'./enums'[0m
+
+
+
+Import traces:
+  #1 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/features/inventory/service.ts
+    ./src/app/(app)/inventory/products/page.tsx
+
+  #2 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/shared/db.ts
+    ./src/features/notifications/service.ts
+    ./src/app/(app)/layout.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/generated/prisma/client.ts:20:1
+Error: Module not found: Can't resolve './internal/class'
+  [90m18 |[0m [36mimport[0m * [36mas[0m runtime [36mfrom[0m [32m"@prisma/client/runtime/client"[0m
+  [90m19 |[0m [36mimport[0m * [36mas[0m $Enums [36mfrom[0m [32m"./enums"[0m
+[31m[1m>[0m [90m20 |[0m [36mimport[0m * [36mas[0m $Class [36mfrom[0m [32m"./internal/class"[0m
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m21 |[0m [36mimport[0m * [36mas[0m [33mPrisma[0m [36mfrom[0m [32m"./internal/prismaNamespace"[0m
+  [90m22 |[0m
+  [90m23 |[0m [36mexport[0m * [36mas[0m $Enums [36mfrom[0m [32m'./enums'[0m
+
+
+
+Import traces:
+  #1 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/features/inventory/service.ts
+    ./src/app/(app)/inventory/products/page.tsx
+
+  #2 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/shared/db.ts
+    ./src/features/notifications/service.ts
+    ./src/app/(app)/layout.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/generated/prisma/client.ts:21:1
+Error: Module not found: Can't resolve './internal/prismaNamespace'
+  [90m19 |[0m [36mimport[0m * [36mas[0m $Enums [36mfrom[0m [32m"./enums"[0m
+  [90m20 |[0m [36mimport[0m * [36mas[0m $Class [36mfrom[0m [32m"./internal/class"[0m
+[31m[1m>[0m [90m21 |[0m [36mimport[0m * [36mas[0m [33mPrisma[0m [36mfrom[0m [32m"./internal/prismaNamespace"[0m
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m22 |[0m
+  [90m23 |[0m [36mexport[0m * [36mas[0m $Enums [36mfrom[0m [32m'./enums'[0m
+  [90m24 |[0m [36mexport[0m * [36mfrom[0m [32m"./enums"[0m
+
+
+
+Import traces:
+  #1 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/features/inventory/service.ts
+    ./src/app/(app)/inventory/products/page.tsx
+
+  #2 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/shared/db.ts
+    ./src/features/notifications/service.ts
+    ./src/app/(app)/layout.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/generated/prisma/client.ts:21:1
+Error: Module not found: Can't resolve './internal/prismaNamespace'
+  [90m19 |[0m [36mimport[0m * [36mas[0m $Enums [36mfrom[0m [32m"./enums"[0m
+  [90m20 |[0m [36mimport[0m * [36mas[0m $Class [36mfrom[0m [32m"./internal/class"[0m
+[31m[1m>[0m [90m21 |[0m [36mimport[0m * [36mas[0m [33mPrisma[0m [36mfrom[0m [32m"./internal/prismaNamespace"[0m
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m22 |[0m
+  [90m23 |[0m [36mexport[0m * [36mas[0m $Enums [36mfrom[0m [32m'./enums'[0m
+  [90m24 |[0m [36mexport[0m * [36mfrom[0m [32m"./enums"[0m
+
+
+
+Import traces:
+  #1 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/features/inventory/service.ts
+    ./src/app/(app)/inventory/products/page.tsx
+
+  #2 [Server Component]:
+    ./src/generated/prisma/client.ts
+    ./src/shared/db.ts
+    ./src/features/notifications/service.ts
+    ./src/app/(app)/layout.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+

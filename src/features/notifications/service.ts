@@ -1,5 +1,6 @@
 ﻿import "server-only";
 import { db } from "@/shared/db";
+import { logger } from "@/shared/core/logger";
 import { NotificationType } from "@/generated/prisma/client";
 
 /**
@@ -170,4 +171,41 @@ export async function markAllRead() {
 
 export async function unreadCount() {
   return db.notification.count({ where: { isRead: false } });
+}
+
+// ---------------------------------------------------------------------------
+// Operation events — fired after a business mutation commits. Never throws:
+// a notification failure must not fail the operation that produced it.
+// ---------------------------------------------------------------------------
+
+export interface NotifyInput {
+  type: NotificationType;
+  title: string;
+  body?: string;
+  href?: string;
+  entityType?: string;
+  entityId?: string;
+}
+
+export async function notify(input: NotifyInput) {
+  syncCache = null; // bell list must include the new event on next read
+  try {
+    await db.notification.create({
+      data: {
+        type: input.type,
+        title: input.title,
+        body: input.body ?? null,
+        href: input.href ?? null,
+        entityType: input.entityType ?? null,
+        entityId: input.entityId ?? null,
+      },
+    });
+  } catch (err) {
+    logger.error("notify_failed", err);
+  }
+}
+
+export async function deleteNotification(id: string) {
+  syncCache = null;
+  await db.notification.delete({ where: { id } });
 }

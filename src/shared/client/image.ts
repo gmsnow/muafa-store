@@ -6,7 +6,8 @@
 
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const MAX_IMAGE_DIMENSION = 1920;
+export const MAX_IMAGE_DIMENSION = 1280;
+const IMAGE_QUALITY = 0.75;
 
 export class ImageError extends Error {
   code: string;
@@ -91,9 +92,9 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   const format = file.type === "image/png" ? "image/webp" : "image/jpeg";
   let dataUrl: string;
   try {
-    dataUrl = canvas.toDataURL(format, 0.85);
+    dataUrl = canvas.toDataURL(format, IMAGE_QUALITY);
   } catch {
-    dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    dataUrl = canvas.toDataURL("image/jpeg", IMAGE_QUALITY);
   }
 
   return { dataUrl, mime: mimeOfDataUrl(dataUrl), name: file.name, size: file.size };

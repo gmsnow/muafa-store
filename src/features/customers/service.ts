@@ -1,8 +1,10 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
 import { notify } from "@/features/notifications/service";
 import { D, money } from "@/shared/core/money";
+import { TXN_IMAGE_BUCKET, uploadObject, removeObjects, downloadObject } from "@/shared/supabase-storage";
 import {
   customerSchema, customerGroupSchema, customerTxnSchema, loyaltyAdjustSchema,
 } from "./schema";
@@ -169,6 +171,7 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
       recordAudit(tx, { userId, action: `CUSTOMER_${input.type}`, entityType: "CustomerTransaction", entityId: txn.id }),
     );
     return {
+      id: txn.id,
       balanceAfter: delta.toString(),
       customerName: customer.name,
       customerNameAr: customer.nameAr ?? null,
@@ -181,7 +184,7 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
     body: `${result.customerNameAr ?? result.customerName} · ${result.txnType} · ${result.amount}`,
     entityType: "Customer", entityId: input.customerId, href: "/customers/transactions",
   });
-  return { balanceAfter: result.balanceAfter };
+  return { id: result.id, balanceAfter: result.balanceAfter };
 }
 
 function txnSearchWhere(q?: string): Prisma.CustomerTransactionWhereInput | undefined {
@@ -396,6 +399,97 @@ export async function deleteCustomerTxn(userId: string, id: string) {
     );
     return { balanceAfter: balance.toString() };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Transaction note images
+// Files live in private Supabase Storage (path: {userId}/{txnId}/{uuid}.ext);
+// only the object path is persisted on the transaction row.
+// ---------------------------------------------------------------------------
+
+export const TXN_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+type TxnImageMime = "image/jpeg" | "image/png" | "image/webp";
+
+function extensionForMime(mime: string): string {
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return "jpg";
+}
+
+/** Sniff the real format from magic bytes — never trust the declared MIME. */
+function sniffImageMime(buffer: Uint8Array): TxnImageMime | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+  ) return "image/png";
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) return "image/webp";
+  return null;
+}
+
+/** Decode + validate a client-provided `data:image/...;base64,...` payload. */
+export function decodeTxnImage(dataUrl: string, mime: string): Buffer {
+  const normalized = mime === "image/jpg" ? "image/jpeg" : mime;
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim());
+  if (!match) throw new AppError("INVALID_IMAGE_TYPE", "Image must be JPG, PNG or WEBP");
+  if (match[1] !== (normalized === "image/jpg" ? "jpeg" : normalized.replace("image/", ""))) {
+    throw new AppError("INVALID_IMAGE_TYPE", "Image must be JPG, PNG or WEBP");
+  }
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.byteLength === 0) throw new AppError("INVALID_IMAGE_TYPE", "Image must be JPG, PNG or WEBP");
+  if (buffer.byteLength > TXN_IMAGE_MAX_BYTES) throw new AppError("IMAGE_TOO_LARGE", "Image must be smaller than 5 MB");
+  if (!sniffImageMime(new Uint8Array(buffer))) throw new AppError("INVALID_IMAGE_TYPE", "Image must be JPG, PNG or WEBP");
+  return buffer;
+}
+
+/**
+ * Attach (or replace) the note image for a transaction.
+ * Upload succeeds first, the DB row is updated next, then the OLD object is
+ * removed — never before the new one is safely in place.
+ */
+export async function attachCustomerTxnImage(userId: string, txnId: string, input: { dataUrl: string; mime: string }) {
+  const buffer = decodeTxnImage(input.dataUrl, input.mime);
+  const txn = await db.customerTransaction.findUnique({ where: { id: txnId }, select: { imagePath: true } });
+  if (!txn) throw new AppError("NOT_FOUND", "Transaction not found");
+
+  const mime = sniffImageMime(new Uint8Array(buffer)) as TxnImageMime;
+  const path = `${userId}/${txnId}/${randomUUID()}.${extensionForMime(mime)}`;
+  const { path: savedPath } = await uploadObject(TXN_IMAGE_BUCKET, path, new Uint8Array(buffer), mime);
+  await db.customerTransaction.update({ where: { id: txnId }, data: { imagePath: savedPath } });
+
+  if (txn.imagePath && txn.imagePath !== savedPath) {
+    try {
+      await removeObjects(TXN_IMAGE_BUCKET, [txn.imagePath]);
+    } catch {
+      // Best effort — the new image is already live; a stale object is cleaned later.
+    }
+  }
+  return { path: savedPath };
+}
+
+export async function deleteCustomerTxnImage(txnId: string): Promise<void> {
+  const txn = await db.customerTransaction.findUnique({ where: { id: txnId }, select: { imagePath: true } });
+  if (!txn) throw new AppError("NOT_FOUND", "Transaction not found");
+  if (!txn.imagePath) return;
+  try {
+    await removeObjects(TXN_IMAGE_BUCKET, [txn.imagePath]);
+  } catch (err) {
+    // Missing object is effectively already deleted — still clear the column.
+    if (!(err instanceof AppError) || !/not found|404/i.test(err.message)) throw err;
+  }
+  await db.customerTransaction.update({ where: { id: txnId }, data: { imagePath: null } });
+}
+
+/** Stream a transaction's note image for the authenticated proxy route. */
+export async function getCustomerTxnImage(txnId: string) {
+  const txn = await db.customerTransaction.findUnique({ where: { id: txnId }, select: { imagePath: true } });
+  if (!txn?.imagePath) throw new AppError("NOT_FOUND", "Image not found");
+  return downloadObject(TXN_IMAGE_BUCKET, txn.imagePath);
 }
 
 export async function getCustomerById(id: string) {

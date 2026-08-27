@@ -1,9 +1,10 @@
 ﻿"use client";
 import { VoiceInput } from "@/components/voice-input";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ImagePlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,9 @@ import {
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import type { Dictionary } from "@/shared/i18n";
-import { recordCustomerTxnAction, adjustLoyaltyAction, saveGroupAction } from "../actions";
+import { recordCustomerTxnAction, adjustLoyaltyAction, saveGroupAction, attachCustomerTxnImageAction } from "../actions";
 import { enqueue } from "@/shared/offline/outbox";
+import { prepareImage, formatBytes, type PreparedImage, ImageError } from "@/shared/client/image";
 
 interface CustomerOpt { id: string; name: string; nameAr: string | null; balance?: string; loyaltyPoints?: string }
 
@@ -36,6 +38,18 @@ export function CustomerTxnDialog({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [type, setType] = useState<"PAYMENT" | "DEBT">("PAYMENT");
+  const [pendingImage, setPendingImage] = useState<PreparedImage | null>(null);
+  const hiddenImageInput = useRef<HTMLInputElement>(null);
+
+  async function handleImageFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      setPendingImage(await prepareImage(file));
+    } catch (err) {
+      const code = err instanceof ImageError ? err.code : "INVALID_IMAGE_TYPE";
+      toast.error(code === "IMAGE_TOO_LARGE" ? tCustomers.imageTooLarge : tCustomers.invalidImageType);
+    }
+  }
 
   async function submit(formData: FormData) {
     setBusy(true);
@@ -43,8 +57,12 @@ export function CustomerTxnDialog({
     const payload = { ...raw, type };
 
     // Offline (or request failed): queue locally, replayed automatically later.
+    // The note image rides along and is uploaded after replay succeeds.
+    const imageExtra = pendingImage
+      ? { imageData: pendingImage.dataUrl, imageMime: pendingImage.mime }
+      : {};
     const saveOffline = async () => {
-      await enqueue("CUSTOMER_TXN", payload);
+      await enqueue("CUSTOMER_TXN", { ...payload, ...imageExtra });
       toast.success(tCustomers.offlineSaved);
       onOpenChange(false);
     };
@@ -62,14 +80,26 @@ export function CustomerTxnDialog({
       setBusy(false);
       return;
     }
-    setBusy(false);
-    if (res.ok) {
-      toast.success(tCustomers.paymentRecorded);
-      onOpenChange(false);
-      router.refresh();
-    } else {
+    if (!res.ok) {
+      setBusy(false);
       toast.error(err(tErrors, res.error.code, res.error.message));
+      return;
     }
+
+    // Attach the note image only after the transaction row exists.
+    let imageOk = true;
+    if (pendingImage) {
+      const attach = await attachCustomerTxnImageAction(res.data.id, {
+        dataUrl: pendingImage.dataUrl,
+        mime: pendingImage.mime,
+      });
+      imageOk = attach.ok;
+      if (!attach.ok) toast.error(err(tErrors, attach.error.code, attach.error.message));
+    }
+    setBusy(false);
+    if (imageOk) toast.success(tCustomers.paymentRecorded);
+    onOpenChange(false);
+    router.refresh();
   }
 
   return (
@@ -102,8 +132,48 @@ export function CustomerTxnDialog({
           </div>
           <div className="space-y-1">
             <Label>{tCommon.notes}</Label>
-            <VoiceInput name="note" maxLength={300} />
+            <VoiceInput
+              name="note"
+              maxLength={300}
+              endButton={(
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={tCustomers.attachImage}
+                  title={tCustomers.attachImage}
+                  onClick={() => hiddenImageInput.current?.click()}
+                  className="absolute end-8 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <ImagePlus className="size-3.5" />
+                </button>
+              )}
+            />
+            <input
+              ref={hiddenImageInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                void handleImageFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
           </div>
+          {pendingImage && (
+            <div className="flex items-center gap-2 rounded-md border p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={pendingImage.dataUrl} alt="" className="size-12 shrink-0 rounded border object-cover" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm">{pendingImage.name}</div>
+                <div className="text-xs text-muted-foreground">{formatBytes(pendingImage.size)}</div>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0"
+                aria-label={tCommon.cancel} title={tCommon.cancel}
+                onClick={() => setPendingImage(null)}>
+                <X className="size-4" />
+              </Button>
+            </div>
+          )}
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               {tCommon.cancel}
@@ -249,7 +319,7 @@ export function GroupFormDialog({
               </select>
             </div>
           </div>
-          <div className="space-y-1">
+<div className="space-y-1">
             <Label>{tCommon.notes}</Label>
             <VoiceInput name="description" maxLength={300} defaultValue={group?.description ?? ""} />
           </div>

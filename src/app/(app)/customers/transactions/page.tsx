@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { DeleteMonthButton } from "./delete-month-button";
 import { TxnRowActions } from "./txn-row-actions";
 import { CustomerLauncher } from "../list/customer-launcher";
+import { TxnImage } from "@/features/customers/ui/image-view";
 
 export default async function CustomerTransactionsPage({
   searchParams,
@@ -141,10 +142,15 @@ export default async function CustomerTransactionsPage({
                   <TableCell className={`text-end tabular-nums ${D(tx.balanceAfter).gt(0) ? "text-destructive" : ""}`} dir="ltr">
                     {formatMoney(D(tx.balanceAfter).toNumber(), locale)}
                   </TableCell>
-                  <TableCell className="max-w-40 truncate text-sm">{tx.note}</TableCell>
+                  <TableCell className="max-w-40 text-sm">
+                    <div className="flex min-w-0 items-center gap-1">
+                      {tx.note && <span className="min-w-0 truncate">{tx.note}</span>}
+                      {tx.imagePath && <TxnImage txnId={tx.id} label={t.customers.viewImage} />}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-end">
                     <TxnRowActions
-                      txn={{ id: tx.id, type: tx.type, amount: String(tx.amount), note: tx.note }}
+                      txn={{ id: tx.id, type: tx.type, amount: String(tx.amount), note: tx.note, imagePath: tx.imagePath }}
                       tCommon={t.common} tCustomers={t.customers} tErrors={t.errors}
                     />
                   </TableCell>

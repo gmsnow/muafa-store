@@ -156,9 +156,26 @@ export async function flushOutbox(): Promise<FlushResult> {
         const res = await checkoutAction(item.payload as Parameters<typeof checkoutAction>[0]);
         ok = res.ok;
       } else {
-        const { recordCustomerTxnAction } = await import("@/features/customers/actions");
-        const res = await recordCustomerTxnAction(item.payload);
-        ok = res.ok;
+        const { recordCustomerTxnAction, attachCustomerTxnImageAction } = await import("@/features/customers/actions");
+        const raw = (item.payload ?? {}) as Record<string, unknown>;
+        const { imageData, imageMime, ...txnPayload } = raw;
+        const res = (await recordCustomerTxnAction(txnPayload)) as
+          | { ok: true; data: { id: string } }
+          | { ok: false };
+        if (!res.ok) {
+          ok = false; // payment failed — stays queued for retry
+        } else if (imageData) {
+          const attach = (await attachCustomerTxnImageAction(res.data.id, {
+            dataUrl: String(imageData),
+            mime: imageMime ? String(imageMime) : "",
+          })) as { ok: boolean };
+          if (!attach.ok) {
+            // Payment already recorded — do NOT re-queue (would double-charge).
+            // Drop the item and surface a sync failure so the operator notices.
+            await removeOutbox(item.id);
+            ok = false;
+          }
+        }
       }
       if (ok) {
         await removeOutbox(item.id);

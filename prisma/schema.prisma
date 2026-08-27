@@ -706,6 +706,7 @@ model CustomerTransaction {
   refType     String?
   refId       String?
   note        String?
+  imagePath   String?
   userId      String?
   createdAt   DateTime               @default(now())
 

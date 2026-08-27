@@ -182,6 +182,12 @@ const ar = {
     monthDeleted: "تم حذف معاملات الشهر",
     choosePeriod: "اختر فترة كشف الحساب", day: "يوم", week: "أسبوع",
     view: "عرض", period: "الفترة", fullStatement: "كشف كامل",
+    image: "الصورة", attachImage: "إرفاق صورة", replaceImage: "استبدال",
+    keepImage: "إبقاء الصورة", imageAttached: "تم إرفاق صورة",
+    imageWillBeDeleted: "سيتم حذف الصورة عند الحفظ",
+    invalidImageType: "يجب أن تكون الصورة JPG أو PNG أو WEBP",
+    imageTooLarge: "يجب أن يكون حجم الصورة أقل من 5 ميجابايت",
+    viewImage: "معاينة الصورة",
   },
   notif: {
     lowStock: "مخزون منخفض", outOfStock: "نفاد المخزون",
@@ -265,6 +271,11 @@ const ar = {
     INTERNAL_ERROR: "خطأ غير متوقع — حاول مجدداً",
     DUPLICATE: "هذا السجل موجود مسبقاً",
     IN_USE: "لا يمكن الحذف — هذا السجل مرتبط ببيانات أخرى",
+    STORAGE_NOT_CONFIGURED: "التخزين السحابي غير مضبوط بعد — راجع المسؤول",
+    INVALID_IMAGE_TYPE: "يجب أن تكون الصورة JPG أو PNG أو WEBP",
+    IMAGE_TOO_LARGE: "يجب أن يكون حجم الصورة أقل من 5 ميجابايت",
+    UPLOAD_FAILED: "تعذر رفع الصورة — حاول مجددًا",
+    IMAGE_DELETE_FAILED: "تعذر حذف الصورة — حاول مجددًا",
   },
 };
 

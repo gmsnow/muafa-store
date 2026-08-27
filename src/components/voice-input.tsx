@@ -105,6 +105,8 @@ function useVoiceInsert() {
 type FieldProps<T extends "input" | "textarea"> = Omit<React.ComponentProps<T>, "ref" | "className"> & {
   ref?: React.Ref<HTMLElement>;
   className?: string;
+  /** Optional icon button rendered inside the field, left of the mic button. */
+  endButton?: React.ReactNode;
 };
 
 function MicButton({
@@ -138,7 +140,7 @@ function MicButton({
   );
 }
 
-export function VoiceInput({ ref: propRef, className, disabled, readOnly, ...props }: FieldProps<"input">) {
+export function VoiceInput({ ref: propRef, className, disabled, readOnly, endButton, ...props }: FieldProps<"input">) {
   const innerRef = useRef<HTMLInputElement | null>(null);
   const { recording, transcribing, toggle } = useVoiceInsert();
 
@@ -152,15 +154,18 @@ export function VoiceInput({ ref: propRef, className, disabled, readOnly, ...pro
 
   return (
     <div className="relative min-w-0 flex-1">
-      <Input {...(props as React.ComponentProps<"input">)} ref={setRef} disabled={disabled} readOnly={readOnly} className={cn("pe-8", className)} />
+      <Input {...(props as React.ComponentProps<"input">)} ref={setRef} disabled={disabled} readOnly={readOnly} className={cn(endButton ? "pe-14" : "pe-8", className)} />
       {!disabled && !readOnly && (
-        <MicButton recording={recording} transcribing={transcribing} onClick={() => void toggle(innerRef.current)} />
+        <>
+          {endButton}
+          <MicButton recording={recording} transcribing={transcribing} onClick={() => void toggle(innerRef.current)} />
+        </>
       )}
     </div>
   );
 }
 
-export function VoiceTextarea({ ref: propRef, className, disabled, readOnly, ...props }: FieldProps<"textarea">) {
+export function VoiceTextarea({ ref: propRef, className, disabled, readOnly, endButton, ...props }: FieldProps<"textarea">) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null);
   const { recording, transcribing, toggle } = useVoiceInsert();
 
@@ -174,9 +179,12 @@ export function VoiceTextarea({ ref: propRef, className, disabled, readOnly, ...
 
   return (
     <div className="relative min-w-0 flex-1">
-      <Textarea {...(props as React.ComponentProps<"textarea">)} ref={setRef} disabled={disabled} readOnly={readOnly} className={cn("pe-8", className)} />
+      <Textarea {...(props as React.ComponentProps<"textarea">)} ref={setRef} disabled={disabled} readOnly={readOnly} className={cn(endButton ? "pe-14" : "pe-8", className)} />
       {!disabled && !readOnly && (
-        <MicButton recording={recording} transcribing={transcribing} onClick={() => void toggle(innerRef.current)} />
+        <>
+          {endButton}
+          <MicButton recording={recording} transcribing={transcribing} onClick={() => void toggle(innerRef.current)} />
+        </>
       )}
     </div>
   );

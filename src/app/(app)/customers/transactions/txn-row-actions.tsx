@@ -16,12 +16,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VoiceInput } from "@/components/voice-input";
-import { updateCustomerTxnAction, deleteCustomerTxnAction } from "@/features/customers/actions";
+import {
+  updateCustomerTxnAction, deleteCustomerTxnAction,
+  attachCustomerTxnImageAction, deleteCustomerTxnImageAction,
+} from "@/features/customers/actions";
+import { TxnImageField } from "@/features/customers/ui/image-field";
+import { txnImageUrl } from "@/features/customers/ui/image-view";
+import type { PreparedImage } from "@/shared/client/image";
 
 type ActionError = { ok: false; error: { code: string; message?: string } };
 
 export interface TxnRowActionsProps {
-  txn: { id: string; type: string; amount: string; note: string | null };
+  txn: { id: string; type: string; amount: string; note: string | null; imagePath: string | null };
   tCommon: Record<string, string>;
   tCustomers: Record<string, string>;
   tErrors: Record<string, string>;
@@ -36,6 +42,8 @@ export function TxnRowActions({ txn, tCommon, tCustomers, tErrors }: TxnRowActio
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [newImage, setNewImage] = useState<PreparedImage | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
 
   async function submitEdit(formData: FormData) {
     setBusy(true);
@@ -44,14 +52,34 @@ export function TxnRowActions({ txn, tCommon, tCustomers, tErrors }: TxnRowActio
       amount: Number(formData.get("amount")),
       note: String(formData.get("note") ?? ""),
     });
-    setBusy(false);
-    if (res.ok) {
-      toast.success(tCustomers.txnUpdated);
-      setOpen(false);
-      router.refresh();
-    } else {
+    if (!res.ok) {
+      setBusy(false);
       toast.error(err(tErrors, (res as ActionError).error.code, (res as ActionError).error.message));
+      return;
     }
+
+    // Keep exists / replace with new / delete — handled after the edit saves.
+    let imageOk = true;
+    if (removeImage) {
+      const del = await deleteCustomerTxnImageAction(txn.id);
+      if (!del.ok) {
+        imageOk = false;
+        toast.error(err(tErrors, (del as ActionError).error.code, (del as ActionError).error.message));
+      }
+    } else if (newImage) {
+      const attach = await attachCustomerTxnImageAction(txn.id, {
+        dataUrl: newImage.dataUrl,
+        mime: newImage.mime,
+      });
+      if (!attach.ok) {
+        imageOk = false;
+        toast.error(err(tErrors, (attach as ActionError).error.code, (attach as ActionError).error.message));
+      }
+    }
+    setBusy(false);
+    if (imageOk) toast.success(tCustomers.txnUpdated);
+    setOpen(false);
+    router.refresh();
   }
 
   async function onDelete() {
@@ -120,6 +148,11 @@ export function TxnRowActions({ txn, tCommon, tCustomers, tErrors }: TxnRowActio
               <Label>{tCommon.notes}</Label>
               <VoiceInput name="note" maxLength={300} defaultValue={txn.note ?? ""} />
             </div>
+            <TxnImageField
+              tCommon={tCommon} tCustomers={tCustomers}
+              existingUrl={txn.imagePath ? txnImageUrl(txn.id) : null}
+              onNewImage={setNewImage} onDeleteExisting={setRemoveImage}
+            />
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={busy}>
                 {tCommon.cancel}

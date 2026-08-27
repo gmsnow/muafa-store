@@ -8,6 +8,7 @@ import {
   recordCustomerTxn, listCustomerTransactions, getStatement,
   adjustLoyalty, deleteCustomerTxnsByMonth,
   updateCustomerTxn, deleteCustomerTxn,
+  attachCustomerTxnImage, deleteCustomerTxnImage,
 } from "./service";
 
 export async function saveCustomerAction(id: string | null, raw: unknown) {
@@ -86,6 +87,22 @@ export async function deleteCustomerTxnAction(id: string) {
   return guard(async () => {
     const user = await requirePermission("customers.credit");
     return ok(await deleteCustomerTxn(user.id, id));
+  });
+}
+
+/** Attach or replace the note image (file travels as a data URL, never base64-stored). */
+export async function attachCustomerTxnImageAction(txnId: string, input: { dataUrl: string; mime: string }) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await attachCustomerTxnImage(user.id, txnId, input));
+  });
+}
+
+export async function deleteCustomerTxnImageAction(txnId: string) {
+  return guard(async () => {
+    await requirePermission("customers.credit");
+    await deleteCustomerTxnImage(txnId);
+    return ok({ deleted: true });
   });
 }
 

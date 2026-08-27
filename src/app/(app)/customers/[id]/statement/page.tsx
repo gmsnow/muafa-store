@@ -10,6 +10,7 @@ import { getStoreSettings } from "@/features/settings/service";
 import { firstParam } from "@/components/pagination";
 import type { CustomerTransactionType } from "@/generated/prisma/client";
 import { PdfActions } from "@/components/pdf-actions";
+import { TxnImage } from "@/features/customers/ui/image-view";
 
 export default async function CustomerStatementPage({
   params,
@@ -194,8 +195,13 @@ export default async function CustomerStatementPage({
               <tr key={x.id}>
                 <td style={bodyCell}>{formatDateTime(x.createdAt, locale)}</td>
                 <td style={bodyCell}>
-                  {typeLabel[x.type]}
-                  {x.note ? ` — ${x.note}` : ""}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 }}>
+                    <span style={{ minWidth: 0, wordBreak: "break-word" }}>
+                      {typeLabel[x.type]}
+                      {x.note ? ` — ${x.note}` : ""}
+                    </span>
+                    {x.imagePath && <TxnImage txnId={x.id} label={t.customers.viewImage} sizeClass="size-10" eager />}
+                  </div>
                 </td>
                 <td style={{ ...bodyCell, textAlign: "left" }} dir="ltr">
                   {debit.gt(0) ? formatMoney(debit.toNumber(), locale) : "—"}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { getT } from "@/shared/i18n";
 import { formatDateTime, formatMoney } from "@/shared/core/format";
@@ -10,7 +10,6 @@ import { getStoreSettings } from "@/features/settings/service";
 import { firstParam } from "@/components/pagination";
 import type { CustomerTransactionType } from "@/generated/prisma/client";
 import { PdfActions } from "@/components/pdf-actions";
-import { TxnImage } from "@/features/customers/ui/image-view";
 
 export default async function CustomerStatementPage({
   params,
@@ -192,27 +191,43 @@ export default async function CustomerStatementPage({
               </td>
             </tr>
             {rows.map(({ x, debit, credit }) => (
-              <tr key={x.id}>
-                <td style={bodyCell}>{formatDateTime(x.createdAt, locale)}</td>
-                <td style={bodyCell}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 }}>
-                    <span style={{ minWidth: 0, wordBreak: "break-word" }}>
-                      {typeLabel[x.type]}
-                      {x.note ? ` — ${x.note}` : ""}
-                    </span>
-                    {x.imagePath && <TxnImage txnId={x.id} label={t.customers.viewImage} sizeClass="size-10" eager />}
-                  </div>
-                </td>
-                <td style={{ ...bodyCell, textAlign: "left" }} dir="ltr">
-                  {debit.gt(0) ? formatMoney(debit.toNumber(), locale) : "—"}
-                </td>
-                <td style={{ ...bodyCell, textAlign: "left" }} dir="ltr">
-                  {credit.gt(0) ? formatMoney(credit.toNumber(), locale) : "—"}
-                </td>
-                <td style={{ ...bodyCell, textAlign: "left", fontWeight: 500 }} dir="ltr">
-                  {formatMoney(D(x.balanceAfter).toNumber(), locale)}
-                </td>
-              </tr>
+              <Fragment key={x.id}>
+                <tr>
+                  <td style={bodyCell}>{formatDateTime(x.createdAt, locale)}</td>
+                  <td style={bodyCell}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 }}>
+                      <span style={{ minWidth: 0, wordBreak: "break-word" }}>
+                        {typeLabel[x.type]}
+                        {x.note ? ` — ${x.note}` : ""}
+                      </span>
+                    </div>
+                  </td>
+                  <td style={{ ...bodyCell, textAlign: "left" }} dir="ltr">
+                    {debit.gt(0) ? formatMoney(debit.toNumber(), locale) : "—"}
+                  </td>
+                  <td style={{ ...bodyCell, textAlign: "left" }} dir="ltr">
+                    {credit.gt(0) ? formatMoney(credit.toNumber(), locale) : "—"}
+                  </td>
+                  <td style={{ ...bodyCell, textAlign: "left", fontWeight: 500 }} dir="ltr">
+                    {formatMoney(D(x.balanceAfter).toNumber(), locale)}
+                  </td>
+                </tr>
+                {x.imagePath && (
+                  <tr>
+                    <td colSpan={5} style={{ ...bodyCell, background: "#fafafa" }}>
+                      <div style={{ display: "flex", justifyContent: "center", padding: "6px 0" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/customers/transactions/${x.id}/image`}
+                          alt=""
+                          loading="eager"
+                          style={{ maxWidth: "100%", maxHeight: 520, borderRadius: 4 }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {rows.length > 0 && (
               <tr style={{ background: "#fafafa", borderTop: "1px solid #999999" }}>

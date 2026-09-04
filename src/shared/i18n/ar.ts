@@ -191,6 +191,7 @@ const ar = {
     freezeBalance: "تجميد الرصيد",
     unfreezeBalance: "إلغاء تجميد الرصيد",
     balanceFrozen: "الرصيد مجمّد",
+    balanceFrozenNotice: "هذا الحساب مجمّد — لا يمكن إضافة دين جديد عليه",
     freezeConfirm: "سيتم منع إضافة ديون جديدة على حساب هذا العميل حتى إلغاء التجميد. متابعة؟",
     unfreezeConfirm: "سيفتح الحساب لإضافة ديون جديدة من جديد. متابعة؟",
     balanceFrozenOk: "تم تجميد الرصيد",

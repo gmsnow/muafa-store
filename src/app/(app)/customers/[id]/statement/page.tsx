@@ -155,6 +155,24 @@ export default async function CustomerStatementPage({
           </div>
         </div>
 
+        {customer.balanceFrozen && (
+          <div
+            style={{
+              marginTop: 14,
+              background: "#fde8e8",
+              color: "#b91c1c",
+              border: "1px solid #f5c2c2",
+              borderRadius: 6,
+              padding: "10px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              textAlign: "center",
+            }}
+          >
+            {t.customers.balanceFrozen} — {t.customers.balanceFrozenNotice}
+          </div>
+        )}
+
         <table className="stmt-info">
           <tbody>
             <tr>

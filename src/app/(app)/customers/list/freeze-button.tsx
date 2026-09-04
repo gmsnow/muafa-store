@@ -31,6 +31,7 @@ interface Props {
 /** Toggle a customer's frozen balance with confirmation. */
 export function FreezeButton({ action, id, frozen, labels }: Props) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const next = !frozen;
 
@@ -40,6 +41,7 @@ export function FreezeButton({ action, id, frozen, labels }: Props) {
     setPending(false);
     if (res.ok) {
       toast.success(next ? labels.freezeOk : labels.unfreezeOk);
+      setOpen(false);
       router.refresh();
     } else {
       toast.error(res.error.message ?? "Failed");
@@ -47,7 +49,7 @@ export function FreezeButton({ action, id, frozen, labels }: Props) {
   }
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size="sm" className={frozen ? "text-destructive hover:text-destructive" : undefined}>
           <Snowflake className={frozen ? "size-3.5 text-destructive" : "size-3.5"} />

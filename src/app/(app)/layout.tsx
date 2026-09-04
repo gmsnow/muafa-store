@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getCurrentUser } from "@/features/auth/session";
 import { getT } from "@/shared/i18n";
 import { getStoreSettings } from "@/features/settings/service";
@@ -7,6 +8,9 @@ import { Topbar } from "@/features/shell/topbar";
 import { syncNotifications } from "@/features/notifications/service";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Defer to a real request so the build's prerender pass never opens DB
+  // connections — they saturate Supabase's session-mode pooler (max 15).
+  await connection();
   const user = await getCurrentUser();
   // Route through /api/auth/expire so a stale-but-signed cookie gets cleared
   // instead of ping-ponging with the proxy's login redirect.

@@ -9,6 +9,7 @@ import {
   adjustLoyalty, deleteCustomerTxnsByMonth,
   updateCustomerTxn, deleteCustomerTxn,
   attachCustomerTxnImage, deleteCustomerTxnImage,
+  setCustomerBalanceFrozen,
 } from "./service";
 
 export async function saveCustomerAction(id: string | null, raw: unknown) {
@@ -37,6 +38,14 @@ export async function deleteCustomerAction(id: string) {
     await requirePermission("customers.update");
     await softDeleteCustomer(id);
     return ok({ deleted: true });
+  });
+}
+
+export async function setCustomerBalanceFrozenAction(id: string, frozen: boolean) {
+  return guard(async () => {
+    await requirePermission("customers.credit");
+    const c = await setCustomerBalanceFrozen(id, frozen);
+    return ok({ id: c.id, balanceFrozen: c.balanceFrozen });
   });
 }
 

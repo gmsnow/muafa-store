@@ -681,6 +681,7 @@ model Customer {
   lastPurchaseAt DateTime?
   notes          String?
   isActive       Boolean   @default(true)
+  balanceFrozen  Boolean   @default(false)
   deletedAt      DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

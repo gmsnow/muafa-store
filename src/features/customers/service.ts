@@ -91,6 +91,14 @@ export async function softDeleteCustomer(id: string) {
   await db.customer.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
 }
 
+/** Freeze/unfreeze a customer's balance — prevents new debt while frozen. */
+export async function setCustomerBalanceFrozen(id: string, frozen: boolean) {
+  const c = await db.customer.findFirst({ where: { id, deletedAt: null } });
+  if (!c) throw new AppError("NOT_FOUND", "Customer not found");
+  if (c.balanceFrozen === frozen) return c;
+  return db.customer.update({ where: { id }, data: { balanceFrozen: frozen } });
+}
+
 // ---------------------------------------------------------------------------
 // Groups
 // ---------------------------------------------------------------------------
@@ -133,6 +141,9 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
   const result = await db.$transaction(async (tx) => {
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, deletedAt: null } });
     if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
+    if (customer.balanceFrozen && input.type !== "PAYMENT") {
+      throw new AppError("BALANCE_FROZEN", "Customer balance is frozen");
+    }
 
     let delta: ReturnType<typeof D>;
     if (input.type === "PAYMENT") {

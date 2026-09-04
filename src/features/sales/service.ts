@@ -161,11 +161,11 @@ export async function createSale(userId: string, raw: unknown) {
     const unpaidRemainder = total.minus(paidSum).gt(0) ? total.minus(paidSum) : new Decimal(0);
 
     const customerId = input.customerId?.trim() || null;
-    let customer: { id: string; balance: Decimal; creditLimit: Decimal; loyaltyPoints: Decimal } | null = null;
+    let customer: { id: string; balance: Decimal; creditLimit: Decimal; loyaltyPoints: Decimal; balanceFrozen: boolean } | null = null;
     if (customerId) {
       customer = await tx.customer.findFirst({
         where: { id: customerId, deletedAt: null },
-        select: { id: true, balance: true, creditLimit: true, loyaltyPoints: true },
+        select: { id: true, balance: true, creditLimit: true, loyaltyPoints: true, balanceFrozen: true },
       });
       if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
     }
@@ -177,6 +177,9 @@ export async function createSale(userId: string, raw: unknown) {
 
     if (creditAmount.gt(0)) {
       if (!customer) throw new AppError("VALIDATION_ERROR", "Credit payment requires a customer / الدفع الآجل يتطلب عميلاً");
+      if (customer.balanceFrozen) {
+        throw new AppError("BALANCE_FROZEN", "Customer balance is frozen");
+      }
       const projectedBalance = D(customer.balance).plus(creditAmount);
       if (D(customer.creditLimit).gt(0) && projectedBalance.gt(D(customer.creditLimit))) {
         throw new AppError("CREDIT_LIMIT_EXCEEDED", "Customer credit limit exceeded");

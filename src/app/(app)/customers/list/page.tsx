@@ -6,10 +6,11 @@ import { getT } from "@/shared/i18n";
 import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import { listCustomers } from "@/features/customers/service";
-import { deleteCustomerAction } from "@/features/customers/actions";
+import { deleteCustomerAction, setCustomerBalanceFrozenAction } from "@/features/customers/actions";
 import { DeleteButton } from "@/features/inventory/ui/delete-button";
 import { StatementPeriodLink } from "./statement-period-link";
 import { CustomerLauncher } from "./customer-launcher";
+import { FreezeButton } from "./freeze-button";
 
 export default async function CustomersPage({
   searchParams,
@@ -55,7 +56,16 @@ export default async function CustomersPage({
               {rows.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-mono text-xs" dir="ltr">{c.code}</TableCell>
-                  <TableCell className="text-sm font-medium">{c.nameAr || c.name}</TableCell>
+                  <TableCell className="text-sm font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {c.nameAr || c.name}
+                      {c.balanceFrozen && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                          {t.customers.balanceFrozen}
+                        </span>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm" dir="ltr">{c.phone ?? "—"}</TableCell>
                   <TableCell className="text-end tabular-nums" dir="ltr">{formatMoney(D(c.creditLimit).toNumber(), locale)}</TableCell>
                   <TableCell className={`text-end tabular-nums ${D(c.balance).gt(0) ? "text-destructive font-medium" : ""}`} dir="ltr">
@@ -81,6 +91,21 @@ export default async function CustomersPage({
                       <CustomerLauncher
                         mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
                         label={t.common.edit} editId={c.id}
+                      />
+                      <FreezeButton
+                        action={setCustomerBalanceFrozenAction}
+                        id={c.id}
+                        frozen={c.balanceFrozen}
+                        labels={{
+                          freeze: t.customers.freezeBalance,
+                          unfreeze: t.customers.unfreezeBalance,
+                          freezeConfirm: t.customers.freezeConfirm,
+                          unfreezeConfirm: t.customers.unfreezeConfirm,
+                          freezeOk: t.customers.balanceFrozenOk,
+                          unfreezeOk: t.customers.balanceUnfrozenOk,
+                          cancel: t.common.cancel,
+                          confirm: t.common.confirm,
+                        }}
                       />
                       <DeleteButton
                         action={deleteCustomerAction}

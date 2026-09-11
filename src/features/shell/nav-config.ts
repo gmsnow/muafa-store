@@ -3,7 +3,7 @@ import {
   CalendarClock, ShoppingCart, ReceiptText,
   Building2, FileText, PackageOpen, RotateCcw, UsersRound,
   CreditCard, LineChart, Wallet, UserCog, KeyRound, ScrollText, Settings2,
-  Store, Globe2, ShieldCheck, DatabaseBackup, type LucideIcon,
+  Store, Globe2, ShieldCheck, DatabaseBackup, Snowflake, type LucideIcon,
 } from "lucide-react";
 import type { Dictionary } from "@/shared/i18n";
 
@@ -59,6 +59,7 @@ export const NAV_GROUPS: NavGroup[] = [
     labelKey: "customers", icon: UsersRound, permission: "customers.view",
     items: [
       { href: "/customers/list", labelKey: "customersList", icon: UsersRound, permission: "customers.view" },
+      { href: "/customers/frozen", labelKey: "frozenAccounts", icon: Snowflake, permission: "customers.view" },
       { href: "/customers/transactions", labelKey: "customerTransactions", icon: CreditCard, permission: "customers.credit" },
     ],
   },

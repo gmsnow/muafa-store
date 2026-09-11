@@ -15,7 +15,7 @@ import type { Prisma } from "@/generated/prisma/client";
 // ---------------------------------------------------------------------------
 
 export async function listCustomers(opts: {
-  q?: string; groupId?: string; includeInactive?: boolean; page?: number; pageSize?: number;
+  q?: string; groupId?: string; includeInactive?: boolean; frozen?: boolean; page?: number; pageSize?: number;
 }) {
   const page = Math.max(1, opts.page ?? 1);
   const pageSize = opts.pageSize ?? 25;
@@ -24,6 +24,7 @@ export async function listCustomers(opts: {
     deletedAt: null,
     ...(!opts.includeInactive ? { isActive: true } : {}),
     ...(opts.groupId ? { groupId: opts.groupId } : {}),
+    ...(opts.frozen === undefined ? {} : { balanceFrozen: opts.frozen }),
     ...(q
       ? {
           OR: [

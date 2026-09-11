@@ -52,6 +52,7 @@ const ar = {
     suppliers: "الموردون", purchaseOrders: "أوامر الشراء", purchases: "الاستلام",
     purchaseReturns: "مرتجعات الشراء",
     customersList: "العملاء", customerGroups: "المجموعات", customerTransactions: "الآجل والمدفوعات", loyalty: "نقاط الولاء",
+    frozenAccounts: "الحسابات المجمّدة",
     store: "بيانات المتجر", localization: "اللغة والتوطين", security: "الأمان", backup: "النسخ الاحتياطي",
     language: "اللغة", notifications: "الإشعارات", markAllRead: "تعليم الكل كمقروء",
     noNotifications: "لا توجد إشعارات",
@@ -196,6 +197,7 @@ const ar = {
     unfreezeConfirm: "سيفتح الحساب لإضافة ديون جديدة من جديد. متابعة؟",
     balanceFrozenOk: "تم تجميد الرصيد",
     balanceUnfrozenOk: "تم إلغاء تجميد الرصيد",
+    frozenAccountsTitle: "الحسابات المجمّدة",
   },
   notif: {
     lowStock: "مخزون منخفض", outOfStock: "نفاد المخزون",

@@ -1,3 +1,4 @@
+import { Snowflake } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,26 +7,28 @@ import { getT } from "@/shared/i18n";
 import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import { listCustomers } from "@/features/customers/service";
-import { deleteCustomerAction, setCustomerBalanceFrozenAction } from "@/features/customers/actions";
-import { DeleteButton } from "@/features/inventory/ui/delete-button";
-import { StatementPeriodLink } from "./statement-period-link";
-import { CustomerLauncher } from "./customer-launcher";
-import { FreezeButton } from "./freeze-button";
+import { setCustomerBalanceFrozenAction } from "@/features/customers/actions";
+import { StatementPeriodLink } from "../list/statement-period-link";
+import { CustomerLauncher } from "../list/customer-launcher";
+import { FreezeButton } from "../list/freeze-button";
 
-export default async function CustomersPage({
+export default async function FrozenCustomersPage({
   searchParams,
-}: PageProps<"/customers/list">) {
+}: PageProps<"/customers/frozen">) {
   const { t, locale } = await getT();
   const sp = await searchParams;
   const page = clampPage(firstParam(sp.page));
   const q = firstParam(sp.q) ?? "";
 
-  const { rows, total } = await listCustomers({ q: q || undefined, includeInactive: true, frozen: false, page });
+  const { rows, total } = await listCustomers({ q: q || undefined, includeInactive: true, frozen: true, page });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">{t.customers.title}</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <Snowflake className="size-5 text-destructive" />
+          {t.customers.frozenAccountsTitle}
+        </h1>
         <CustomerLauncher
           mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
           label={t.common.create} editId={null}
@@ -59,11 +62,10 @@ export default async function CustomersPage({
                   <TableCell className="text-sm font-medium">
                     <span className="inline-flex items-center gap-1.5">
                       {c.nameAr || c.name}
-                      {c.balanceFrozen && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-                          {t.customers.balanceFrozen}
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                        <Snowflake className="size-2.5" />
+                        {t.customers.balanceFrozen}
+                      </span>
                     </span>
                   </TableCell>
                   <TableCell className="text-sm" dir="ltr">{c.phone ?? "—"}</TableCell>
@@ -106,19 +108,6 @@ export default async function CustomersPage({
                           cancel: t.common.cancel,
                           confirm: t.common.confirm,
                         }}
-                      />
-                      <DeleteButton
-                        action={deleteCustomerAction}
-                        id={c.id}
-                        title={t.customers.customerDeleted}
-                        description={t.customers.deleteConfirm}
-                        confirmLabel={t.common.delete}
-                        cancelLabel={t.common.cancel}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                            {t.common.delete}
-                          </Button>
-                        }
                       />
                     </div>
                   </TableCell>

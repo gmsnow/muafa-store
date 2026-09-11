@@ -50,17 +50,27 @@ export function PdfActions({
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const imgH = (canvas.height * pageW) / canvas.width;
-    const imgData = canvas.toDataURL("image/jpeg", 0.92);
-    let remaining = imgH;
-    let position = 0;
-    while (remaining > 0) {
-      pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH, undefined, "FAST");
-      remaining -= pageH;
-      if (remaining > 0) {
-        position -= pageH;
-        pdf.addPage();
-      }
+
+    // Horizontal content band (in canvas px) that maps to one A4 page when the
+    // full width is scaled to pageW. Pages are cropped bands of the single
+    // capture, so long reports flow onto as many pages as the height needs.
+    const pxPage = (pageH * canvas.width) / pageW;
+    const pages = Math.max(1, Math.ceil(canvas.height / pxPage));
+
+    const sliceCanvas = document.createElement("canvas");
+    const sliceCtx = sliceCanvas.getContext("2d");
+    if (!sliceCtx) throw new Error("Canvas 2D context unavailable");
+    sliceCanvas.width = canvas.width;
+
+    for (let i = 0; i < pages; i++) {
+      const y = Math.floor(i * pxPage);
+      const sliceH = Math.min(canvas.height - y, pxPage);
+      sliceCanvas.height = Math.ceil(sliceH);
+      sliceCtx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      sliceCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      const sliceMmH = (sliceH * pageW) / canvas.width;
+      if (i > 0) pdf.addPage();
+      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", 0, 0, pageW, sliceMmH, undefined, "FAST");
     }
     return pdf.output("blob");
   }, [targetId, captureWidth]);

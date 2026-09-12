@@ -53,7 +53,6 @@ interface CheckoutResult {
   paid: number;
   changeDue: number;
   credit: number;
-  pointsEarned: number;
   offline?: boolean;
 }
 
@@ -223,7 +222,6 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
         paid: Math.min(paid, totals.total),
         changeDue: 0,
         credit: totals.creditTotal,
-        pointsEarned: 0,
         offline: true,
       });
       setCart([]);
@@ -484,7 +482,6 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
                 <Row label={s.grandTotal} value={formatMoney(receipt?.total ?? 0, locale)} />
                 {(receipt?.changeDue ?? 0) > 0 && <Row label={s.changeDue} value={formatMoney(receipt!.changeDue, locale)} />}
                 {(receipt?.credit ?? 0) > 0 && <Row label={s.payCredit} value={formatMoney(receipt!.credit, locale)} />}
-                {(receipt?.pointsEarned ?? 0) > 0 && <Row label={t.customers.loyaltyPoints} value={String(receipt!.pointsEarned)} />}
               </div>
             </DialogDescription>
           </DialogHeader>

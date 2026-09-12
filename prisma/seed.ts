@@ -205,22 +205,19 @@ async function main() {
   );
   const firstNames = ["Ahmed", "Mohammed", "Ali", "Fatima", "Salma", "Yousef", "Omar", "Nour", "Layla", "Hassan"];
   const lastNames = ["Al-Sabri", "Al-Haddi", "Saleh", "Al-Qadhi", "Naji", "Al-Ansi", "Murshed", "Al-Sharabi"];
-  const customers: { id: string; groupName: string; points: number }[] = [];
+  const customers: { id: string; groupName: string }[] = [];
   for (let i = 1; i <= 24; i++) {
     const groupName = i <= 14 ? "Retail" : i <= 19 ? "Wholesale" : i <= 21 ? "VIP" : "Credit Account";
     const name = `${pick(firstNames)} ${pick(lastNames)}`;
-    const points = int(0, 800);
     const c = await db.customer.create({
       data: {
         code: `CUS-${pad(i, 4)}`, name, phone: `71${int(10000000, 99999999)}`,
         groupId: groupIds[groupName],
         creditLimit: groupName === "Credit Account" ? m2(int(100000, 500000)) : "0",
-        loyaltyPoints: m2(points),
       },
     });
-    customers.push({ id: c.id, groupName, points });
+    customers.push({ id: c.id, groupName });
   }
-  const pointsBalance = new Map<string, number>(customers.map((c) => [c.id, c.points]));
 
   // ── Settings ─────────────────────────────────────────────────────────────
   await db.storeSettings.create({
@@ -234,8 +231,7 @@ async function main() {
   });
   await db.systemSettings.create({
     data: {
-      id: "system", expirationWarningDays: 30, enableLoyalty: true,
-      loyaltyEarnPerSpent: "1", loyaltyPointValue: "1",
+      id: "system", expirationWarningDays: 30,
       language: "ar", timezone: "Asia/Aden",
     },
   });
@@ -355,14 +351,13 @@ async function main() {
   drafts.sort((a, b) => a.date.getTime() - b.date.getTime());
 
   let invoiceSeq = 0;
-  const customerAgg = new Map<string, { total: number; balanceDelta: number; points: number }>();
+  const customerAgg = new Map<string, { total: number; balanceDelta: number }>();
   for (const draft of drafts) {
     invoiceSeq++;
     const subtotal = draft.items.reduce((a, it) => a + it.qty * it.unitPrice, 0);
     const costTotal = draft.items.reduce((a, it) => a + it.qty * it.cost, 0);
     const paidTotal = draft.payments.filter((p) => p.method !== "CREDIT").reduce((a, p) => a + p.amount, 0);
     const creditAmount = subtotal - paidTotal;
-    const pointsEarned = draft.customerId ? Math.floor(subtotal / 100) : 0;
 
     const sale = await db.sale.create({
       data: {
@@ -371,7 +366,6 @@ async function main() {
         status: "COMPLETED",
         subtotal: m2(subtotal), total: m2(subtotal), costTotal: m2(costTotal),
         paidTotal: m2(paidTotal), creditAmount: m2(creditAmount),
-        loyaltyPointsEarned: m2(pointsEarned),
         items: {
           create: draft.items.map((it) => ({
             productId: it.productId, productName: it.productName, productNameAr: it.nameAr,
@@ -411,20 +405,10 @@ async function main() {
     }
 
     if (draft.customerId) {
-      const agg = customerAgg.get(draft.customerId) ?? { total: 0, balanceDelta: 0, points: 0 };
+      const agg = customerAgg.get(draft.customerId) ?? { total: 0, balanceDelta: 0 };
       agg.total += subtotal;
       agg.balanceDelta += creditAmount;
-      agg.points += pointsEarned;
       customerAgg.set(draft.customerId, agg);
-      const runningPoints = (pointsBalance.get(draft.customerId) ?? 0) + pointsEarned;
-      pointsBalance.set(draft.customerId, runningPoints);
-      await db.loyaltyTransaction.create({
-        data: {
-          customerId: draft.customerId, type: "EARN", points: m2(pointsEarned),
-          balanceAfter: m2(runningPoints),
-          refType: "Sale", refId: sale.id, createdAt: draft.date,
-        },
-      });
     }
   }
 
@@ -433,8 +417,7 @@ async function main() {
     await db.customer.update({
       where: { id: customerId },
       data: {
-        totalPurchases: m2(agg.total), balance: m2(agg.balanceDelta),
-        loyaltyPoints: { increment: agg.points }, lastPurchaseAt: new Date(),
+        totalPurchases: m2(agg.total), balance: m2(agg.balanceDelta), lastPurchaseAt: new Date(),
       },
     });
   }
@@ -561,7 +544,7 @@ async function main() {
 async function wipe() {
   for (const t of [
     db.notification.deleteMany(), db.backupRecord.deleteMany(), db.auditLog.deleteMany(),
-    db.loyaltyTransaction.deleteMany(), db.customerTransaction.deleteMany(),
+    db.customerTransaction.deleteMany(),
     db.saleReturnItem.deleteMany(), db.saleReturn.deleteMany(), db.salePayment.deleteMany(),
     db.saleItem.deleteMany(), db.sale.deleteMany(),
     db.purchaseReturnItem.deleteMany(), db.purchaseReturn.deleteMany(),

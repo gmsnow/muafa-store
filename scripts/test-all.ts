@@ -6,7 +6,7 @@ const SUITES: { name: string; file: string; covers: string }[] = [
   { name: "Auth & sessions", file: "scripts/smoke-auth.ts", covers: "§49 auth matrix: login, lockout, reset, forced change" },
   { name: "Sales core", file: "scripts/smoke.ts", covers: "F2 checkout, F3 returns, cancel reversal, credit sale" },
   { name: "Procurement", file: "scripts/smoke-procurement.ts", covers: "F4 receiving/batches, F5 returns, PO machine" },
-  { name: "Customers", file: "scripts/smoke-customers.ts", covers: "credit/ledger invariants, loyalty, soft-delete guards" },
+  { name: "Customers", file: "scripts/smoke-customers.ts", covers: "credit/ledger invariants, soft-delete guards" },
   { name: "Reports", file: "scripts/smoke-reports.ts", covers: "8 report families + financial summary vs raw SQL" },
   { name: "Expenses/Notif/Search", file: "scripts/smoke-m9.ts", covers: "expense rules, notification dedupe, global search" },
   { name: "Settings/Users/Roles/Backups", file: "scripts/smoke-m10.ts", covers: "settings persist+affect behavior, RBAC admin, pg_dump" },

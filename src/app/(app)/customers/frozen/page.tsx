@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { firstParam, Pagination, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
-import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
+import { formatDateTime, formatMoney } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import { listCustomers } from "@/features/customers/service";
 import { setCustomerBalanceFrozenAction } from "@/features/customers/actions";
@@ -51,7 +51,6 @@ export default async function FrozenCustomersPage({
                 <TableHead>{t.customers.phone}</TableHead>
                 <TableHead className="text-end">{t.customers.creditLimit}</TableHead>
                 <TableHead className="text-end">{t.customers.balance}</TableHead>
-                <TableHead className="text-end">{t.customers.loyaltyPoints}</TableHead>
                 <TableHead>{t.customers.lastPurchase}</TableHead>
                 <TableHead className="text-end">{t.common.actions}</TableHead>
               </TableRow>
@@ -74,7 +73,6 @@ export default async function FrozenCustomersPage({
                   <TableCell className={`text-end tabular-nums ${D(c.balance).gt(0) ? "text-destructive font-medium" : ""}`} dir="ltr">
                     {formatMoney(D(c.balance).toNumber(), locale)}
                   </TableCell>
-                  <TableCell className="text-end tabular-nums" dir="ltr">{formatNumber(D(c.loyaltyPoints).toNumber(), locale)}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                     {c.lastPurchaseAt ? formatDateTime(c.lastPurchaseAt, locale) : "—"}
                   </TableCell>
@@ -115,7 +113,7 @@ export default async function FrozenCustomersPage({
                 </TableRow>
               ))}
               {rows.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="h-28 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

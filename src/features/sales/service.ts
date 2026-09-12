@@ -355,7 +355,7 @@ export async function getSaleByInvoice(invoiceNumber: string) {
 
 // ---------------------------------------------------------------------------
 // Cancel (M5): exact reversal — stock restored to the SAME batches via the
-// original SALE movements, customer balance/loyalty reversed, status CANCELLED.
+// original SALE movements, customer balance reversed, status CANCELLED.
 // ---------------------------------------------------------------------------
 
 export async function cancelSale(userId: string, saleId: string) {

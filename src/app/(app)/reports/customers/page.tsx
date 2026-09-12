@@ -22,7 +22,6 @@ export default async function CustomersReportPage({ searchParams }: PageProps<"/
         { label: t.reports.activeCustomers, value: formatNumber(totals.activeCustomers, locale) },
         { label: t.reports.receivables, value: formatMoney(totals.receivables, locale), accent: true },
         { label: t.reports.overLimit, value: formatNumber(totals.overLimit, locale) },
-        { label: t.reports.loyaltyPts, value: formatNumber(totals.loyaltyPointsOutstanding, locale) },
       ]} />
 
       <ReportSection title={`${formatNumber(items.length, locale)} ${t.nav.customers}`}>
@@ -35,7 +34,6 @@ export default async function CustomersReportPage({ searchParams }: PageProps<"/
               <TableHead className="text-end">{t.reports.revenueCol}</TableHead>
               <TableHead className="text-end">{t.reports.outstanding}</TableHead>
               <TableHead className="text-end">{t.customers.creditLimit}</TableHead>
-              <TableHead className="text-end">{t.reports.loyaltyPts}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -54,11 +52,10 @@ export default async function CustomersReportPage({ searchParams }: PageProps<"/
                   {formatMoney(c.balance, locale)}
                 </TableCell>
                 <TableCell className="text-end tabular-nums text-muted-foreground">{formatMoney(c.creditLimit, locale)}</TableCell>
-                <TableCell className="text-end tabular-nums text-muted-foreground">{formatNumber(c.loyaltyPoints, locale)}</TableCell>
               </TableRow>
             ))}
             {items.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="h-20 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-20 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

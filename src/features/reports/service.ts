@@ -398,13 +398,12 @@ export async function inventoryValuation() {
 export async function customersReport(range: ReportRange) {
   const rows = await db.$queryRaw<{
     id: string; code: string; name: string; name_ar: string | null;
-    invoices: string; purchases: string; balance: string; credit_limit: string; points: string;
+    invoices: string; purchases: string; balance: string; credit_limit: string;
   }[]>`
     SELECT c.id, c.code, c.name, c."nameAr" AS name_ar,
            COALESCE(s.invoices, 0)::text AS invoices,
            COALESCE(s.purchases, 0)::text AS purchases,
-           c.balance::text AS balance, c."creditLimit"::text AS credit_limit,
-           c."loyaltyPoints"::text AS points
+           c.balance::text AS balance, c."creditLimit"::text AS credit_limit
     FROM customers c
     LEFT JOIN (
       SELECT "customerId", COUNT(*) AS invoices, SUM("total" - "refundedAmount") AS purchases
@@ -422,7 +421,6 @@ export async function customersReport(range: ReportRange) {
     purchases: n2(r.purchases),
     balance: n2(r.balance),
     creditLimit: n2(r.credit_limit),
-    loyaltyPoints: n2(r.points),
   }));
 
   return {
@@ -431,7 +429,6 @@ export async function customersReport(range: ReportRange) {
       activeCustomers: items.filter((i) => i.invoices > 0).length,
       receivables: money(items.filter((i) => i.balance > 0).reduce((a, i) => a + i.balance, 0)).toNumber(),
       overLimit: items.filter((i) => i.creditLimit > 0 && i.balance > i.creditLimit).length,
-      loyaltyPointsOutstanding: money(items.reduce((a, i) => a + i.loyaltyPoints, 0)).toNumber(),
     },
   };
 }
@@ -614,11 +611,11 @@ export async function exportReportCsv(family: string, range: ReportRange): Promi
     case "customers": {
       const { items, totals } = await customersReport(range);
       return [
-        toCsv(["code", "customer", "invoices", "purchases", "balance", "creditLimit", "loyaltyPoints"],
-          items.map((i) => [i.code, i.name, i.invoices, i.purchases, i.balance, i.creditLimit, i.loyaltyPoints])),
+        toCsv(["code", "customer", "invoices", "purchases", "balance", "creditLimit"],
+          items.map((i) => [i.code, i.name, i.invoices, i.purchases, i.balance, i.creditLimit])),
         "",
-        toCsv(["receivables", "activeCustomers", "overLimit", "loyaltyPointsOutstanding"], [[
-          totals.receivables, totals.activeCustomers, totals.overLimit, totals.loyaltyPointsOutstanding]]),
+        toCsv(["receivables", "activeCustomers", "overLimit"], [[
+          totals.receivables, totals.activeCustomers, totals.overLimit]]),
       ].join("\n");
     }
     case "suppliers": {

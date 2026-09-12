@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Dictionary } from "@/shared/i18n";
 import { CustomerForm } from "@/features/customers/ui/customer-form";
-import { CustomerTxnDialog, LoyaltyAdjustDialog } from "@/features/customers/ui/credit-forms";
+import { CustomerTxnDialog } from "@/features/customers/ui/credit-forms";
 type Common = Dictionary["common"];
 type Errors = Dictionary["errors"];
 type CustomersDict = Dictionary["customers"];
@@ -15,12 +15,12 @@ export function CustomerLauncher({
   tCommon, tErrors, tCustomers, tProcurement,
   label, editId, customers, defaultCustomerId,
 }: {
-  mode: "form" | "payment" | "loyalty";
+  mode: "form" | "payment";
   tCommon: Common;
   tErrors: Errors;
   tCustomers: CustomersDict;
   tProcurement?: ProcurementDict;
-  customers?: { id: string; name: string; nameAr: string | null; balance?: string; loyaltyPoints?: string }[];
+  customers?: { id: string; name: string; nameAr: string | null; balance?: string }[];
   label: string;
   editId: string | null;
   defaultCustomerId?: string;
@@ -39,13 +39,6 @@ export function CustomerLauncher({
       )}
       {mode === "payment" && (
         <CustomerTxnDialog
-          tCommon={tCommon} tErrors={tErrors} tCustomers={tCustomers}
-          open={open} onOpenChange={setOpen}
-          customers={customers ?? []} defaultCustomerId={defaultCustomerId}
-        />
-      )}
-      {mode === "loyalty" && (
-        <LoyaltyAdjustDialog
           tCommon={tCommon} tErrors={tErrors} tCustomers={tCustomers}
           open={open} onOpenChange={setOpen}
           customers={customers ?? []} defaultCustomerId={defaultCustomerId}

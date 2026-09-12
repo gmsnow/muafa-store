@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Loader2, Printer, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ export type PdfActionLabels = {
   print?: string;
   generatingPdf: string;
   shareFailed: string;
+  downloadFallback?: string;
 };
 
 /**
@@ -34,6 +35,7 @@ export function PdfActions({
   captureWidth?: number;
 }) {
   const [busy, setBusy] = useState(false);
+  const blobCacheRef = useRef<Promise<Blob> | null>(null);
 
   const buildPdfBlob = useCallback(async (): Promise<Blob> => {
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
@@ -75,6 +77,24 @@ export function PdfActions({
     return pdf.output("blob");
   }, [targetId, captureWidth]);
 
+  const getCachedBlob = useCallback((): Promise<Blob> => {
+    blobCacheRef.current ??= buildPdfBlob();
+    return blobCacheRef.current;
+  }, [buildPdfBlob]);
+
+  useEffect(() => {
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      getCachedBlob().catch(() => {
+        if (alive) blobCacheRef.current = null;
+      });
+    }, 800);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [getCachedBlob]);
+
   const triggerDownload = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -88,15 +108,22 @@ export function PdfActions({
     if (busy) return;
     setBusy(true);
     try {
-      const blob = await buildPdfBlob();
+      const blob = await getCachedBlob();
       const file = new File([blob], `${fileName}.pdf`, { type: "application/pdf" });
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (nav.canShare?.({ files: [file] })) {
-        await nav.share({ files: [file], title: fileName });
-      } else {
-        triggerDownload(blob);
-        toast.info("تم تنزيل الملف — أرسله عبر واتساب");
+        try {
+          await nav.share({ files: [file], title: fileName });
+        } catch (e) {
+          const err = e as Error;
+          if (err?.name === "AbortError") return;
+          triggerDownload(blob);
+          toast.info(labels.downloadFallback ?? "تم تنزيل الملف — أرسله عبر واتساب");
+        }
+        return;
       }
+      triggerDownload(blob);
+      toast.info(labels.downloadFallback ?? "تم تنزيل الملف — أرسله عبر واتساب");
     } catch (e) {
       const err = e as Error;
       if (err?.name !== "AbortError") {
@@ -112,7 +139,7 @@ export function PdfActions({
     if (busy) return;
     setBusy(true);
     try {
-      triggerDownload(await buildPdfBlob());
+      triggerDownload(await getCachedBlob());
     } catch (e) {
       console.error("[pdf] build failed:", e);
       toast.error(labels.shareFailed);

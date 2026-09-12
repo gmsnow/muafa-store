@@ -17,6 +17,7 @@ const ar = {
     today: "اليوم", week: "هذا الأسبوع", month: "هذا الشهر", year: "هذه السنة",
     view: "عرض", phone: "الهاتف", address: "العنوان",
     sharePdf: "مشاركة PDF", generatingPdf: "جارٍ إنشاء PDF…", shareFailed: "تعذر إنشاء الملف، جرّب مرة أخرى",
+    downloadFallback: "تم تنزيل الملف — أرسله عبر واتساب",
     offline: "أوفلاين", syncNow: "مزامنة الآن",
     syncDone: "تمت مزامنة {count} عملية", syncFailed: "تعذرت مزامنة بعض العمليات — سنحاول مجددًا تلقائيًا",
   },

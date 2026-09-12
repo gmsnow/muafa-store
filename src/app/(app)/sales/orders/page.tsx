@@ -2,12 +2,12 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, clampPage } from "@/components/pagination";
+import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
 import { formatDateTime, formatMoney } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
@@ -36,7 +36,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/sales/ord
       <h1 className="text-2xl font-bold tracking-tight">{t.sales.ordersTitle}</h1>
 
       <form className="flex flex-wrap items-center gap-2" action="/sales/orders">
-        <Input name="q" defaultValue={sp.q ?? ""} placeholder="INV-000001" className="w-48" dir="ltr" />
+        <LiveQueryInput placeholder="INV-000001" className="w-48" />
         <Select name="status" defaultValue={sp.status ?? "all"}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>

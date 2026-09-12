@@ -1,6 +1,6 @@
 ﻿import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { VoiceInput } from "@/components/voice-input";
+import { LiveQueryInput } from "@/components/live-query-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, clampPage, DEFAULT_PAGE_SIZE } from "@/components/pagination";
 import { getT } from "@/shared/i18n";
@@ -33,7 +33,7 @@ export default async function StockPage({ searchParams }: PageProps<"/inventory/
       </div>
 
       <form className="flex flex-wrap items-center gap-2" action="/inventory/stock">
-        <VoiceInput name="q" defaultValue={q ?? ""} placeholder={t.common.searchPlaceholder} className="w-full sm:w-64" />
+        <LiveQueryInput placeholder={t.common.searchPlaceholder} className="w-full sm:w-64" />
         <select name="categoryId" defaultValue={categoryId ?? ""} className="h-9 w-full rounded-md border bg-background px-2 text-sm sm:w-48">
           <option value="">{t.common.all}</option>
           {categories.map((c) => (

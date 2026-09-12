@@ -29,14 +29,6 @@ export const customerTxnSchema = z.object({
   note: z.string().trim().max(300).optional().or(z.literal("")),
 });
 
-export const loyaltyAdjustSchema = z.object({
-  customerId: z.string().uuid(),
-  mode: z.enum(["REDEEM", "ADJUST"]),
-  points: z.coerce.number(),
-  note: z.string().trim().max(300).optional().or(z.literal("")),
-});
-
 export type CustomerInput = z.infer<typeof customerSchema>;
 export type CustomerGroupInput = z.infer<typeof customerGroupSchema>;
 export type CustomerTxnInput = z.infer<typeof customerTxnSchema>;
-export type LoyaltyAdjustInput = z.infer<typeof loyaltyAdjustSchema>;

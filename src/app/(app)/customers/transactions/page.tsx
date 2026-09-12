@@ -14,7 +14,7 @@ import {
   getCustomerById,
 } from "@/features/customers/service";
 import { deleteCustomerTxnsMonthAction } from "@/features/customers/actions";
-import { VoiceInput } from "@/components/voice-input";
+import { LiveQueryInput } from "@/components/live-query-input";
 import { Button } from "@/components/ui/button";
 import { DeleteMonthButton } from "./delete-month-button";
 import { TxnRowActions } from "./txn-row-actions";
@@ -64,7 +64,7 @@ export default async function CustomerTransactionsPage({
         <div className="flex flex-wrap items-center gap-2">
           <form className="flex flex-wrap items-center gap-2" action="/customers/transactions">
             {customerId && <input type="hidden" name="customerId" value={customerId} />}
-            <VoiceInput name="q" defaultValue={q ?? ""} placeholder={t.common.searchPlaceholder} className="w-full sm:w-56" />
+            <LiveQueryInput placeholder={t.common.searchPlaceholder} className="w-full sm:w-56" />
             <input
               type="month" name="month" defaultValue={monthParam}
               className="h-9 rounded-md border bg-background px-2 text-sm"

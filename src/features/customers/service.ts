@@ -6,7 +6,7 @@ import { notify } from "@/features/notifications/service";
 import { D, money } from "@/shared/core/money";
 import { TXN_IMAGE_BUCKET, uploadObject, removeObjects, downloadObject } from "@/shared/supabase-storage";
 import {
-  customerSchema, customerGroupSchema, customerTxnSchema, loyaltyAdjustSchema,
+  customerSchema, customerGroupSchema, customerTxnSchema,
 } from "./schema";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -524,99 +524,11 @@ export async function getStatement(
     ...(opts?.from ? { gte: opts.from } : {}),
     ...(opts?.to ? { lte: opts.to } : {}),
   };
-  const [txns, loyalty] = await Promise.all([
-    db.customerTransaction.findMany({
-      where: { customerId, ...(createdAt.gte || createdAt.lte ? { createdAt } : {}) },
-      orderBy: { createdAt: "asc" },
-      take: 500,
-    }),
-    db.loyaltyTransaction.findMany({
-      where: { customerId },
-      orderBy: { createdAt: "asc" },
-      take: 500,
-    }),
-  ]);
-  return { customer, txns, loyalty };
-}
-
-// ---------------------------------------------------------------------------
-// Loyalty — REDEEM converts points to balance reduction? No: redeeming gives
-// store credit → we reduce points and REDUCE balance owed by customer? Points
-// are redeemed against purchases at loyaltyPointValue each; simplest correct
-// model: REDEEM reduces points and reduces customer.balance (credit voucher).
-// ---------------------------------------------------------------------------
-
-export async function adjustLoyalty(raw: {
-  customerId: string;
-  mode: "REDEEM" | "ADJUST";
-  points: number;
-  note?: string;
-  userId?: string;
-}) {
-  const input = loyaltyAdjustSchema.parse(raw);
-  return db.$transaction(async (tx) => {
-    const customer = await tx.customer.findFirst({ where: { id: input.customerId, deletedAt: null } });
-    if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
-    const settings = await tx.systemSettings.findUnique({ where: { id: "system" } });
-    const pointValue = settings?.loyaltyPointValue ? D(settings.loyaltyPointValue) : D(1);
-
-    let newPoints: ReturnType<typeof D>;
-    let type: "REDEEM" | "ADJUST";
-
-    if (input.mode === "REDEEM") {
-      if (input.points <= 0) throw new AppError("VALIDATION_ERROR", "Points must be positive");
-      const requested = money(input.points);
-      if (requested.gt(D(customer.loyaltyPoints))) {
-        throw new AppError("VALIDATION_ERROR", `Only ${customer.loyaltyPoints} points available`);
-      }
-      newPoints = D(customer.loyaltyPoints).minus(requested);
-      type = "REDEEM";
-
-      // Store credit: reduce what the customer owes (floor at zero).
-      const creditValue = pointValue.mul(requested);
-      const newBalance = D(customer.balance).minus(creditValue);
-      await tx.customer.update({
-        where: { id: customer.id },
-        data: { loyaltyPoints: newPoints.toString(), balance: newBalance.toString() },
-      });
-      if (creditValue.gt(0)) {
-        await tx.customerTransaction.create({
-          data: {
-            customerId: customer.id,
-            type: "ADJUSTMENT",
-            amount: creditValue.toString(),
-            balanceAfter: newBalance.toString(),
-            note: `Loyalty redeem ${requested} pts`,
-            userId: raw.userId ?? null,
-          },
-        });
-      }
-    } else {
-      // ADJUST may be negative (correction).
-      const delta = D(input.points);
-      newPoints = D(customer.loyaltyPoints).plus(delta);
-      if (newPoints.lt(0)) throw new AppError("VALIDATION_ERROR", "Resulting points would be negative");
-      type = "ADJUST";
-      await tx.customer.update({
-        where: { id: customer.id },
-        data: { loyaltyPoints: newPoints.toString() },
-      });
-    }
-
-    const txn = await tx.loyaltyTransaction.create({
-      data: {
-        customerId: customer.id,
-        type,
-        points: input.points.toString(),
-        balanceAfter: newPoints.toString(),
-        note: input.note || null,
-      },
-    });
-
-    await import("@/shared/core/audit").then(({ recordAudit }) =>
-      recordAudit(tx, { userId: raw.userId, action: `LOYALTY_${type}`, entityType: "LoyaltyTransaction", entityId: txn.id }),
-    );
-    return { pointsAfter: newPoints.toString() };
+  const txns = await db.customerTransaction.findMany({
+    where: { customerId, ...(createdAt.gte || createdAt.lte ? { createdAt } : {}) },
+    orderBy: { createdAt: "asc" },
+    take: 500,
   });
+  return { customer, txns };
 }
 

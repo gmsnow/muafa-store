@@ -92,14 +92,6 @@ enum CustomerTransactionType {
   @@map("customer_transaction_type")
 }
 
-enum LoyaltyTransactionType {
-  EARN
-  REDEEM
-  ADJUST
-
-  @@map("loyalty_transaction_type")
-}
-
 enum NotificationType {
   LOW_STOCK
   OUT_OF_STOCK
@@ -676,7 +668,6 @@ model Customer {
   groupId        String?
   creditLimit    Decimal   @default(0) @db.Decimal(14, 2)
   balance        Decimal   @default(0) @db.Decimal(14, 2)
-  loyaltyPoints  Decimal   @default(0) @db.Decimal(14, 2)
   totalPurchases Decimal   @default(0) @db.Decimal(14, 2)
   lastPurchaseAt DateTime?
   notes          String?
@@ -689,7 +680,6 @@ model Customer {
   group       CustomerGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
   sales       Sale[]
   transactions CustomerTransaction[]
-  loyaltyTransactions LoyaltyTransaction[]
 
   @@index([phone])
   @@index([name])
@@ -720,23 +710,6 @@ model CustomerTransaction {
   @@map("customer_transactions")
 }
 
-model LoyaltyTransaction {
-  id          String                @id @default(uuid())
-  customerId  String
-  type        LoyaltyTransactionType
-  points      Decimal               @db.Decimal(14, 2)
-  balanceAfter Decimal              @db.Decimal(14, 2)
-  refType     String?
-  refId       String?
-  note        String?
-  createdAt   DateTime              @default(now())
-
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
-
-  @@index([customerId, createdAt])
-  @@map("loyalty_transactions")
-}
-
 // ============================================================================
 // SALES
 // ============================================================================
@@ -758,8 +731,6 @@ model Sale {
   changeDue         Decimal    @default(0) @db.Decimal(14, 2)
   creditAmount      Decimal    @default(0) @db.Decimal(14, 2)
   refundedAmount    Decimal    @default(0) @db.Decimal(14, 2)
-  loyaltyPointsEarned Decimal  @default(0) @db.Decimal(14, 2)
-  loyaltyPointsRedeemed Decimal @default(0) @db.Decimal(14, 2)
   notes             String?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -945,9 +916,6 @@ model SystemSettings {
   lowStockThresholdDays Int     @default(7)
   expirationWarningDays Int     @default(30)
   batchTrackingEnabled  Boolean @default(true)
-  enableLoyalty         Boolean @default(true)
-  loyaltyEarnPerSpent   Decimal @default(1) @db.Decimal(14, 4)
-  loyaltyPointValue     Decimal @default(1) @db.Decimal(14, 4)
   language              String  @default("ar")
   dateFormat            String  @default("yyyy-MM-dd")
   timezone              String  @default("Asia/Aden")

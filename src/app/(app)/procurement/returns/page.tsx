@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { firstParam, Pagination, clampPage } from "@/components/pagination";
+import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
 import { formatDateTime, formatMoney } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
@@ -29,7 +30,7 @@ export default async function PurchaseReturnsPage({
       </div>
 
       <form className="flex flex-wrap gap-2">
-        <input name="q" defaultValue={q} placeholder="PRE-â€¦" className="h-9 rounded-md border bg-background px-3 text-sm" />
+        <LiveQueryInput placeholder="PRE-…" className="w-full sm:w-64" />
         <Button type="submit" variant="outline" size="sm">{t.common.filter}</Button>
       </form>
 

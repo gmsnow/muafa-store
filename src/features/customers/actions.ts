@@ -6,7 +6,7 @@ import {
   saveCustomer, softDeleteCustomer, getCustomerForEdit,
   listGroups, saveGroup, deleteGroup,
   recordCustomerTxn, listCustomerTransactions, getStatement,
-  adjustLoyalty, deleteCustomerTxnsByMonth,
+  deleteCustomerTxnsByMonth,
   updateCustomerTxn, deleteCustomerTxn,
   attachCustomerTxnImage, deleteCustomerTxnImage,
   setCustomerBalanceFrozen,
@@ -126,12 +126,5 @@ export async function statementAction(customerId: string) {
   return guard(async () => {
     await requirePermission("customers.view");
     return ok(await getStatement(customerId));
-  });
-}
-
-export async function adjustLoyaltyAction(raw: unknown) {
-  return guard(async () => {
-    const user = await requirePermission("customers.loyalty");
-    return ok(await adjustLoyalty({ ...(raw as Record<string, unknown>), userId: user.id } as Parameters<typeof adjustLoyalty>[0]));
   });
 }

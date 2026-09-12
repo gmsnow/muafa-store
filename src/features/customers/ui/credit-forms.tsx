@@ -13,11 +13,11 @@ import {
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import type { Dictionary } from "@/shared/i18n";
-import { recordCustomerTxnAction, adjustLoyaltyAction, saveGroupAction, attachCustomerTxnImageAction } from "../actions";
+import { recordCustomerTxnAction, saveGroupAction, attachCustomerTxnImageAction } from "../actions";
 import { enqueue } from "@/shared/offline/outbox";
 import { prepareImage, formatBytes, type PreparedImage, ImageError } from "@/shared/client/image";
 
-interface CustomerOpt { id: string; name: string; nameAr: string | null; balance?: string; loyaltyPoints?: string }
+interface CustomerOpt { id: string; name: string; nameAr: string | null; balance?: string }
 
 function err(tErrors: Dictionary["errors"], code: string, message: string) {
   return code in tErrors ? tErrors[code as keyof typeof tErrors] : message;
@@ -174,83 +174,6 @@ export function CustomerTxnDialog({
               </Button>
             </div>
           )}
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-              {tCommon.cancel}
-            </Button>
-            <Button type="submit" disabled={busy}>{busy ? tCommon.saving : tCommon.save}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function LoyaltyAdjustDialog({
-  tCommon, tErrors, tCustomers, open, onOpenChange,
-  customers, defaultCustomerId,
-}: {
-  tCommon: Dictionary["common"];
-  tErrors: Dictionary["errors"];
-  tCustomers: Dictionary["customers"];
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  customers: CustomerOpt[];
-  defaultCustomerId?: string;
-}) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<"REDEEM" | "ADJUST">("REDEEM");
-
-  async function submit(formData: FormData) {
-    setBusy(true);
-    const raw = Object.fromEntries(formData.entries());
-    const res = await adjustLoyaltyAction({ ...raw, mode });
-    setBusy(false);
-    if (res.ok) {
-      toast.success(tCommon.save);
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      toast.error(err(tErrors, res.error.code, res.error.message));
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{mode === "REDEEM" ? tCustomers.redeemPoints : tCustomers.adjustPoints}</DialogTitle>
-          <DialogDescription />
-        </DialogHeader>
-        <form action={submit} className="space-y-3">
-          <div className="space-y-1">
-            <Label>{tCustomers.title}</Label>
-            <select name="customerId" required defaultValue={defaultCustomerId ?? ""}
-              className="h-9 w-full rounded-md border bg-background px-2 text-sm">
-              <option value="">—</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nameAr ?? c.name}{c.loyaltyPoints ? ` (${c.loyaltyPoints} ${tCustomers.loyaltyPoints})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="button" variant={mode === "REDEEM" ? "default" : "outline"}
-              onClick={() => setMode("REDEEM")}>{tCustomers.redeemPoints}</Button>
-            <Button type="button" variant={mode === "ADJUST" ? "default" : "outline"}
-              onClick={() => setMode("ADJUST")}>{tCustomers.adjustPoints}</Button>
-          </div>
-          <div className="space-y-1">
-            <Label>{mode === "ADJUST" ? `${tCustomers.adjustPoints} (±)` : tCustomers.redeemPoints}</Label>
-            <Input name="points" type="number" step="0.01" dir="ltr" required autoFocus
-              placeholder={mode === "ADJUST" ? "-5 or +10" : "0"} />
-          </div>
-          <div className="space-y-1">
-            <Label>{tCommon.notes}</Label>
-            <VoiceInput name="note" maxLength={300} />
-          </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               {tCommon.cancel}

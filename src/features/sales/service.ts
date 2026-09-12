@@ -161,11 +161,11 @@ export async function createSale(userId: string, raw: unknown) {
     const unpaidRemainder = total.minus(paidSum).gt(0) ? total.minus(paidSum) : new Decimal(0);
 
     const customerId = input.customerId?.trim() || null;
-    let customer: { id: string; balance: Decimal; creditLimit: Decimal; loyaltyPoints: Decimal; balanceFrozen: boolean } | null = null;
+    let customer: { id: string; balance: Decimal; creditLimit: Decimal; balanceFrozen: boolean } | null = null;
     if (customerId) {
       customer = await tx.customer.findFirst({
         where: { id: customerId, deletedAt: null },
-        select: { id: true, balance: true, creditLimit: true, loyaltyPoints: true, balanceFrozen: true },
+        select: { id: true, balance: true, creditLimit: true, balanceFrozen: true },
       });
       if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
     }
@@ -276,12 +276,7 @@ export async function createSale(userId: string, raw: unknown) {
     }
 
     // 8 — Customer side-effects.
-    let loyaltyPointsEarned = new Decimal(0);
     if (customer) {
-      const settings = await tx.systemSettings.findUnique({ where: { id: "system" } });
-      if (settings?.enableLoyalty && settings.loyaltyEarnPerSpent.gt(0)) {
-        loyaltyPointsEarned = money(total.dividedBy(100).mul(settings.loyaltyEarnPerSpent));
-      }
       const newBalance = D(customer.balance).plus(creditAmount);
       await tx.customer.update({
         where: { id: customer.id },
@@ -289,9 +284,6 @@ export async function createSale(userId: string, raw: unknown) {
           balance: newBalance.toString(),
           totalPurchases: { increment: total.toString() },
           lastPurchaseAt: new Date(),
-          ...(loyaltyPointsEarned.gt(0)
-            ? { loyaltyPoints: { increment: loyaltyPointsEarned.toString() } }
-            : {}),
         },
       });
       if (creditAmount.gt(0)) {
@@ -308,23 +300,6 @@ export async function createSale(userId: string, raw: unknown) {
           },
         });
       }
-      if (loyaltyPointsEarned.gt(0)) {
-        await tx.loyaltyTransaction.create({
-          data: {
-            customerId: customer.id,
-            type: "EARN",
-            points: loyaltyPointsEarned.toString(),
-            balanceAfter: D(customer.loyaltyPoints).plus(loyaltyPointsEarned).toString(),
-            refType: "Sale",
-            refId: sale.id,
-            note: invoiceNumber,
-          },
-        });
-      }
-    }
-
-    if (loyaltyPointsEarned.gt(0)) {
-      await tx.sale.update({ where: { id: sale.id }, data: { loyaltyPointsEarned: loyaltyPointsEarned.toString() } });
     }
 
     return {
@@ -334,7 +309,6 @@ export async function createSale(userId: string, raw: unknown) {
       paid: finalPaid.toNumber(),
       changeDue: changeDue.toNumber(),
       credit: creditAmount.toNumber(),
-      pointsEarned: loyaltyPointsEarned.toNumber(),
     };
   }, { isolationLevel: "Serializable", timeout: 15000 }).then(async (result) => {
     const { recordAudit } = await import("@/shared/core/audit");
@@ -421,7 +395,7 @@ export async function cancelSale(userId: string, saleId: string) {
     if (sale.customerId) {
       const customer = await tx.customer.findUnique({
         where: { id: sale.customerId },
-        select: { balance: true, loyaltyPoints: true, totalPurchases: true },
+        select: { balance: true, totalPurchases: true },
       });
       if (customer) {
         const newBalance = D(customer.balance).minus(D(sale.creditAmount));
@@ -430,9 +404,6 @@ export async function cancelSale(userId: string, saleId: string) {
           data: {
             balance: newBalance.toString(),
             totalPurchases: { decrement: D(sale.total).toString() },
-            ...(D(sale.loyaltyPointsEarned).gt(0)
-              ? { loyaltyPoints: { decrement: D(sale.loyaltyPointsEarned).toString() } }
-              : {}),
           },
         });
         if (D(sale.creditAmount).gt(0)) {

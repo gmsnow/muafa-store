@@ -210,6 +210,7 @@ const ar = {
   },
   reports: {
     title: "التقارير", dateRange: "الفترة الزمنية",
+    generatedAt: "تاريخ الإنشاء", direction: "الاتجاه", rtl: "من اليمين إلى اليسار",
     salesReport: "تقرير المبيعات", purchasesReport: "تقرير المشتريات", profitReport: "تقرير الأرباح",
     inventoryReport: "تقرير المخزون", customersReport: "تقرير العملاء",
     suppliersReport: "تقرير الموردين", expensesReport: "تقرير المصروفات",

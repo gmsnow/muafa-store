@@ -3,6 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getT } from "@/shared/i18n";
+import { getStoreSettings } from "@/features/settings/service";
+import { formatDateTime, formatDate } from "@/shared/core/format";
+import { Sprout, Clock, MoveHorizontal } from "lucide-react";
 import { ExportButton } from "@/features/inventory/ui/export-csv-button";
 import { exportReportAction } from "../actions";
 import { PdfActions } from "@/components/pdf-actions";
@@ -21,14 +24,37 @@ export async function ReportHeader({
   fromISO: string;
   toISO: string;
 }) {
-  const { t } = await getT();
+  const { t, locale } = await getT();
+  const store = await getStoreSettings();
+  const storeName = store?.nameAr ?? store?.name ?? "";
+  const fromLabel = formatDate(fromISO, locale);
+  const toLabel = formatDate(toISO, locale);
+  const generatedAt = formatDateTime(new Date(), locale);
   const exportAction = exportReportAction.bind(null, family, fromISO, toISO);
 
   return (
     <div className="space-y-3">
+      <div className="border-b pb-3">
+        <p className="text-sm font-semibold text-primary">{storeName}</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">{title}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground print:[&_span]:text-black">
+          <span className="inline-flex items-center gap-1.5">
+            <Sprout className="size-3.5" />
+            {t.reports.csv.period}: <bdi dir="ltr">{fromLabel} ← {toLabel}</bdi>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Clock className="size-3.5" />
+            {t.reports.generatedAt}: <span dir="ltr">{generatedAt}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <MoveHorizontal className="size-3.5" />
+            {t.reports.direction}: {t.reports.rtl}
+          </span>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <h2 className="sr-only">{t.common.export}</h2>
+        <div className="ms-auto flex flex-wrap items-center gap-2 print:hidden">
           <ExportButton action={exportAction} filename={`${family}-report`} label={t.common.export} />
           <PdfActions
             targetId="pdf-paper"

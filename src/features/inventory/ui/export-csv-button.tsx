@@ -5,12 +5,16 @@ import { toast } from "sonner";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function ExportCsvButton({
+type ExportResult =
+  | { ok: true; data: { base64: string; mime: string; ext: string } }
+  | { ok: false; error: { code: string; message: string } };
+
+export function ExportButton({
   action,
   filename,
   label,
 }: {
-  action: () => Promise<{ ok: true; data: { csv: string } } | { ok: false; error: { code: string; message: string } }>;
+  action: () => Promise<ExportResult>;
   filename: string;
   label: string;
 }) {
@@ -18,19 +22,23 @@ export function ExportCsvButton({
 
   async function download() {
     setBusy(true);
-    const res = await action();
-    setBusy(false);
-    if (!res.ok) {
-      toast.error(res.error.message);
-      return;
+    try {
+      const res = await action();
+      if (!res.ok) {
+        toast.error(res.error.message);
+        return;
+      }
+      const bytes = Uint8Array.from(atob(res.data.base64), (ch) => ch.charCodeAt(0));
+      const blob = new Blob([bytes], { type: res.data.mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.${res.data.ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
     }
-    const blob = new Blob(["\uFEFF" + res.data.csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   return (

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getT } from "@/shared/i18n";
-import { ExportCsvButton } from "@/features/inventory/ui/export-csv-button";
+import { ExportButton } from "@/features/inventory/ui/export-csv-button";
 import { exportReportAction } from "../actions";
 import { PdfActions } from "@/components/pdf-actions";
 
@@ -29,11 +29,12 @@ export async function ReportHeader({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <ExportCsvButton action={exportAction} filename={`${family}-report`} label={t.common.export} />
+          <ExportButton action={exportAction} filename={`${family}-report`} label={t.common.export} />
           <PdfActions
             targetId="pdf-paper"
             fileName={`${family}-report_${fromISO}_to_${toISO}`}
             captureWidth={1280}
+            decorate
             labels={{
               sharePdf: t.common.sharePdf,
               generatingPdf: t.common.generatingPdf,

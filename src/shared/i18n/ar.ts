@@ -9,7 +9,7 @@ const ar = {
     autoHint: "(تلقائي)", active: "نشط", inactive: "غير نشط", date: "التاريخ", user: "المستخدم", notes: "ملاحظات",
     total: "الإجمالي", subtotal: "المجموع الفرعي", discount: "الخصم",
     quantity: "الكمية", unitPrice: "سعر الوحدة",
-    print: "طباعة", export: "تصدير CSV", import: "استيراد", download: "تنزيل",
+    print: "طباعة", export: "تصدير Excel", import: "استيراد", download: "تنزيل",
     retry: "إعادة المحاولة", loading: "جارٍ التحميل…", noData: "لا توجد سجلات", errorTitle: "حدث خطأ ما",
     previous: "السابق", next: "التالي", page: "صفحة", of: "من",
     yes: "نعم", no: "لا", all: "الكل", from: "من", to: "إلى", reset: "مسح",

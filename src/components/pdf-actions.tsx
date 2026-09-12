@@ -13,6 +13,27 @@ export type PdfActionLabels = {
   downloadFallback?: string;
 };
 
+/** Thin rule + "1 / N" page number + filename in the bottom margin band. */
+function drawFooter(
+  pdf: import("jspdf").jsPDF,
+  page: number,
+  pages: number,
+  pageW: number,
+  pageH: number,
+  marginX: number,
+  marginBottom: number,
+  fileName: string,
+) {
+  const baseY = pageH - marginBottom + 4;
+  pdf.setDrawColor(200, 205, 214);
+  pdf.setLineWidth(0.25);
+  pdf.line(marginX, baseY - 1, pageW - marginX, baseY - 1);
+  pdf.setFontSize(8);
+  pdf.setTextColor(110, 120, 134);
+  pdf.text(fileName, marginX + 1, baseY + 4);
+  pdf.text(`${page} / ${pages}`, pageW / 2, baseY + 4, { align: "center" });
+}
+
 /**
  * Captures the element #targetId (default "pdf-paper") into an A4 PDF built
  * with html2canvas-pro (oklch-safe) + jsPDF, then offers Web-Share (WhatsApp
@@ -23,6 +44,7 @@ export function PdfActions({
   targetId = "pdf-paper",
   labels,
   captureWidth,
+  decorate = false,
 }: {
   fileName: string;
   targetId?: string;
@@ -33,6 +55,11 @@ export function PdfActions({
    * mobile layout stretched over A4 (giant fonts).
    */
   captureWidth?: number;
+  /**
+   * Wrap the capture in A4 margins with a footer (page numbers + filename).
+   * Turned on for reports; receipts keep the full-bleed thermal layout.
+   */
+  decorate?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const blobCacheRef = useRef<Promise<Blob> | null>(null);
@@ -50,13 +77,20 @@ export function PdfActions({
       ...(captureWidth ? { windowWidth: Math.max(captureWidth, el.offsetWidth) } : {}),
     });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    pdf.setProperties({ title: fileName, subject: fileName, creator: "Muafa Store" });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
 
+    const marginX = decorate ? 10 : 0;
+    const marginTop = decorate ? 12 : 0;
+    const marginBottom = decorate ? 15 : 0;
+    const imgW = pageW - marginX * 2;
+    const usableH = pageH - marginTop - marginBottom;
+
     // Horizontal content band (in canvas px) that maps to one A4 page when the
-    // full width is scaled to pageW. Pages are cropped bands of the single
+    // full width is scaled to imgW. Pages are cropped bands of the single
     // capture, so long reports flow onto as many pages as the height needs.
-    const pxPage = (pageH * canvas.width) / pageW;
+    const pxPage = (usableH * canvas.width) / imgW;
     const pages = Math.max(1, Math.ceil(canvas.height / pxPage));
 
     const sliceCanvas = document.createElement("canvas");
@@ -70,12 +104,13 @@ export function PdfActions({
       sliceCanvas.height = Math.ceil(sliceH);
       sliceCtx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
       sliceCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-      const sliceMmH = (sliceH * pageW) / canvas.width;
+      const sliceMmH = (sliceH * imgW) / canvas.width;
       if (i > 0) pdf.addPage();
-      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", 0, 0, pageW, sliceMmH, undefined, "FAST");
+      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, sliceMmH, undefined, "FAST");
+      if (decorate) drawFooter(pdf, i + 1, pages, pageW, pageH, marginX, marginBottom, fileName);
     }
     return pdf.output("blob");
-  }, [targetId, captureWidth]);
+  }, [targetId, captureWidth, decorate, fileName]);
 
   const getCachedBlob = useCallback((): Promise<Blob> => {
     blobCacheRef.current ??= buildPdfBlob();

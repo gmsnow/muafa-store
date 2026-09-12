@@ -6,6 +6,7 @@ import { parseReportRange } from "../src/features/reports/schema";
 import {
   salesSummary, profitReport, inventoryValuation, customersReport,
   suppliersReport, expensesReport, financialSummary, exportReportCsv,
+  exportReportWorkbook,
 } from "../src/features/reports/service";
 
 let failures = 0;
@@ -96,10 +97,16 @@ async function main() {
     JSON.stringify({ inv: es.invoices, ns: es.netSales, np: ep.netProfit }),
   );
 
-  // ---- CSV exports produce headers for all families
+  // ---- CSV exports produce headers for all families (title row, then sections)
   for (const family of ["sales", "purchases", "profit", "inventory", "customers", "suppliers", "expenses"]) {
     const csv = await exportReportCsv(family, range);
-    check(`csv:${family}`, typeof csv === "string" && csv.length > 10 && csv.split("\n")[0].includes(","));
+    check(`csv:${family}`, typeof csv === "string" && csv.length > 10 && csv.split("\n")[1].includes(","));
+    const wb = await exportReportWorkbook(family, range);
+    check(
+      `xlsx:${family}`,
+      Buffer.isBuffer(wb) && wb.length > 1000 && wb.subarray(0, 2).toString("latin1") === "PK",
+      `len=${wb.length}`,
+    );
   }
 
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);

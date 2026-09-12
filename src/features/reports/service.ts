@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/shared/db";
 import { money } from "@/shared/core/money";
+import { dict, type Dictionary } from "@/shared/i18n";
 import type { ReportRange } from "./schema";
 
 /**
@@ -550,100 +551,231 @@ export async function financialSummary(range: ReportRange) {
 }
 
 // ---------------------------------------------------------------------------
-// CSV EXPORTS
+// CSV EXPORTS — localized, sectioned, spreadsheet-friendly
 // ---------------------------------------------------------------------------
 
-const esc = (s: unknown) => {
+const esc = (s: unknown): string => {
   const v = String(s ?? "");
   return /[",;\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 };
-const toCsv = (head: string[], rows: unknown[][]): string =>
-  [head.join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
+const csvRow = (...cells: Array<string | number>): string => cells.map(esc).join(",");
+/** Plain dot-decimal number so spreadsheets can sum it (no currency symbol). */
+const num = (n: number): string => String(Number(n.toFixed(2)));
+const int = (n: number): string => String(Math.round(n));
+
+interface CsvSection {
+  title: string;
+  header: Array<string | number>;
+  rows: Array<Array<string | number>>;
+  footer?: Array<Array<string | number>>;
+}
+
+function reportCsv(t: Dictionary, title: string, range: ReportRange, sections: CsvSection[]): string {
+  const c = t.reports.csv;
+  const lines: string[] = [esc(title)];
+  lines.push(csvRow(c.period, t.common.from, range.fromISO, t.common.to, range.toISO));
+  lines.push("");
+  for (const s of sections) {
+    lines.push(esc(s.title));
+    lines.push(csvRow(...s.header));
+    for (const r of s.rows) lines.push(csvRow(...r));
+    if (s.footer) for (const f of s.footer) lines.push(csvRow(...f));
+    lines.push("");
+  }
+  while (lines.length && lines[lines.length - 1] === "") lines.pop();
+  return lines.join("\n");
+}
+
+/** Key/value block (summary, totals …) shaped like a small two-column table. */
+function kvSection(
+  t: Dictionary,
+  title: string,
+  entries: Array<[string, number]>,
+): CsvSection {
+  const c = t.reports.csv;
+  return {
+    title,
+    header: [c.statement, c.value],
+    rows: entries.map(([k, v]) => [k, num(v)]),
+  };
+}
+
+function methodLabel(method: string, t: Dictionary): string {
+  const map: Record<string, string> = {
+    CASH: t.sales.payCash, CARD: t.sales.payCard,
+    BANK_TRANSFER: t.sales.payTransfer, WALLET: t.sales.payWallet,
+  };
+  return map[method] ?? method;
+}
 
 export async function exportReportCsv(family: string, range: ReportRange): Promise<string> {
+  const t = dict();
+  const R = t.reports;
+  const c = R.csv;
+
   switch (family) {
     case "sales": {
       const { summary, buckets, byCashier, products } = await salesReport(range);
-      return [
-        toCsv(["metric", "value"], [
-          ["invoices", summary.invoices], ["grossSales", summary.grossSales],
-          ["returns", summary.returnsTotal], ["netSales", summary.netSales],
-          ["discounts", summary.discounts],
-          ["cogs", summary.cogs], ["avgTicket", summary.avgTicket],
+      return reportCsv(t, R.salesReport, range, [
+        kvSection(t, c.summary, [
+          [R.invoicesCol, summary.invoices],
+          [R.grossSales, summary.grossSales],
+          [R.returns, summary.returnsTotal],
+          [R.netSales, summary.netSales],
+          [t.common.discount, summary.discounts],
+          [R.cogs, summary.cogs],
+          [R.avgTicket, summary.avgTicket],
         ]),
-        "",
-        toCsv(["day", "revenue", "cost", "profit"], buckets.map((b) => [b.day, b.revenue, b.cost, b.profit])),
-        "",
-        toCsv(["cashier", "invoices", "netSales"], byCashier.map((c) => [c.name, c.qty, c.total])),
-        "",
-        toCsv(["skuProduct", "unitsSold", "revenue", "profit"], products.map((p) => [p.name, p.qty, p.total, p.profit])),
-      ].join("\n");
+        {
+          title: R.byDay,
+          header: [c.date, R.revenueCol, R.cogs, R.grossProfit],
+          rows: buckets.map((b) => [b.day, num(b.revenue), num(b.cost), num(b.profit)]),
+        },
+        {
+          title: R.cashierReport,
+          header: [t.usersPage.fullName, R.invoicesCol, R.netSales],
+          rows: byCashier.map((x) => [x.nameAr ?? x.name, int(x.qty), num(x.total)]),
+        },
+        {
+          title: R.productPerformance,
+          header: [c.product, R.unitsSold, R.revenueCol, R.grossProfit],
+          rows: products.map((p) => [p.nameAr ?? p.name, num(p.qty), num(p.total), num(p.profit)]),
+        },
+      ]);
     }
     case "purchases": {
       const { summary, buckets, bySupplier } = await purchasesReport(range);
-      return [
-        toCsv(["metric", "value"], [
-          ["docs", summary.docs], ["gross", summary.gross], ["discounts", summary.discounts],
-          ["paid", summary.paid], ["due", summary.due],
-          ["returns", summary.returnsTotal],
+      return reportCsv(t, R.purchasesReport, range, [
+        kvSection(t, c.summary, [
+          [R.docsCount, summary.docs],
+          [c.grossPurchases, summary.gross],
+          [t.common.discount, summary.discounts],
+          [R.totalPaid, summary.paid],
+          [c.due, summary.due],
+          [R.inputTax, summary.inputTax],
+          [R.returns, summary.returnsTotal],
         ]),
-        "",
-        toCsv(["day", "total"], buckets.map((b) => [b.day, b.total])),
-        "",
-        toCsv(["supplier", "docs", "total"], bySupplier.map((s) => [s.name, s.qty, s.total])),
-      ].join("\n");
+        {
+          title: R.byDay,
+          header: [c.date, t.common.total],
+          rows: buckets.map((b) => [b.day, num(b.total)]),
+        },
+        {
+          title: R.bySupplier,
+          header: [c.name, R.docsCount, t.common.total],
+          rows: bySupplier.map((s) => [s.nameAr ?? s.name, int(s.qty), num(s.total)]),
+        },
+      ]);
     }
     case "profit": {
       const p = await profitReport(range);
-      return toCsv(["month", "netSales", "cogs", "grossProfit", "expenses", "netProfit"],
-        p.monthly.map((m) => [m.month, m.sales, m.cogs, m.grossProfit, m.expenses, m.netProfit]));
+      return reportCsv(t, R.profitReport, range, [
+        kvSection(t, c.summary, [
+          [R.netSales, p.netSales],
+          [R.cogs, p.cogs],
+          [R.grossProfit, p.grossProfit],
+          [R.operatingExpenses, p.expenses],
+          [R.netProfit, p.netProfit],
+          [R.margin, p.marginPercent],
+        ]),
+        {
+          title: R.byMonth,
+          header: [c.month, R.netSales, R.cogs, R.grossProfit, R.operatingExpenses, R.netProfit],
+          rows: p.monthly.map((m) => [
+            m.month, num(m.sales), num(m.cogs), num(m.grossProfit), num(m.expenses), num(m.netProfit),
+          ]),
+        },
+      ]);
     }
     case "inventory": {
       const { items, totals } = await inventoryValuation();
-      return [
-        toCsv(["sku", "product", "category", "qty", "costPrice", "stockValue", "retailValue", "potentialProfit"],
-          items.map((i) => [i.sku, i.name, i.categoryName, i.quantity, i.costPrice, i.stockValue, i.retailValue, i.potentialProfit])),
-        "",
-        toCsv(["totals"], [[`stockValue=${totals.stockValue}`], [`retailValue=${totals.retailValue}`],
-          [`potentialProfit=${totals.potentialProfit}`], [`lowCount=${totals.lowCount}`], [`outCount=${totals.outCount}`]]),
-      ].join("\n");
+      return reportCsv(t, R.inventoryReport, range, [
+        {
+          title: c.totals,
+          header: [c.statement, c.value],
+          rows: [
+            [R.stockValue, num(totals.stockValue)],
+            [R.retailValue, num(totals.retailValue)],
+            [R.potentialProfit, num(totals.potentialProfit)],
+            [t.dashboard.lowStockProducts, int(totals.lowCount)],
+            [t.dashboard.outOfStock, int(totals.outCount)],
+          ],
+        },
+        {
+          title: t.products.title,
+          header: [t.products.sku, t.products.name, c.category, t.common.quantity, t.products.costPrice, R.stockValue, R.retailValue, R.potentialProfit],
+          rows: items.map((i) => [
+            i.sku, i.nameAr ?? i.name, i.categoryName, num(i.quantity), num(i.costPrice),
+            num(i.stockValue), num(i.retailValue), num(i.potentialProfit),
+          ]),
+        },
+      ]);
     }
     case "customers": {
       const { items, totals } = await customersReport(range);
-      return [
-        toCsv(["code", "customer", "invoices", "purchases", "balance", "creditLimit"],
-          items.map((i) => [i.code, i.name, i.invoices, i.purchases, i.balance, i.creditLimit])),
-        "",
-        toCsv(["receivables", "activeCustomers", "overLimit"], [[
-          totals.receivables, totals.activeCustomers, totals.overLimit]]),
-      ].join("\n");
+      return reportCsv(t, R.customersReport, range, [
+        kvSection(t, c.totals, [
+          [R.receivables, totals.receivables],
+          [R.activeCustomers, totals.activeCustomers],
+          [R.overLimit, totals.overLimit],
+        ]),
+        {
+          title: t.nav.customersList,
+          header: [c.code, R.customerCol, R.invoicesCol, c.purchases, c.balance, c.creditLimit],
+          rows: items.map((i) => [
+            i.code, i.nameAr ?? i.name, int(i.invoices),
+            num(i.purchases), num(i.balance), num(i.creditLimit),
+          ]),
+        },
+      ]);
     }
     case "suppliers": {
       const { items, totals } = await suppliersReport(range);
-      return [
-        toCsv(["code", "supplier", "docs", "purchases", "returns", "netPurchases", "balancePayable"],
-          items.map((i) => [i.code, i.name, i.docs, i.purchases, i.returnsTotal, i.netPurchases, i.balance])),
-        "",
-        toCsv(["payables", "purchaseVolume"], [[totals.payables, totals.purchaseVolume]]),
-      ].join("\n");
+      return reportCsv(t, R.suppliersReport, range, [
+        kvSection(t, c.totals, [
+          [R.payables, totals.payables],
+          [R.purchaseVolume, totals.purchaseVolume],
+        ]),
+        {
+          title: t.nav.suppliers,
+          header: [c.code, R.supplierCol, R.docsCount, c.purchases, R.returns, c.netPurchases, R.payables],
+          rows: items.map((i) => [
+            i.code, i.nameAr ?? i.name, int(i.docs),
+            num(i.purchases), num(i.returnsTotal), num(i.netPurchases), num(i.balance),
+          ]),
+        },
+      ]);
     }
     case "tax": {
-      const t = await taxReport(range);
-      return [
-        toCsv(["metric", "value"], [["outputTax", t.outputTax], ["inputTax", t.inputTax], ["netPayable", t.netPayable]]),
-        "",
-        toCsv(["month", "output", "input", "net"], t.monthly.map((m) => [m.month, m.output, m.input, m.net])),
-      ].join("\n");
+      const tax = await taxReport(range);
+      return reportCsv(t, R.taxReport, range, [
+        kvSection(t, c.summary, [
+          [R.outputTax, tax.outputTax],
+          [R.inputTax, tax.inputTax],
+          [R.netTaxPayable, tax.netPayable],
+        ]),
+        {
+          title: R.byMonth,
+          header: [c.month, R.outputTax, R.inputTax, c.netTax],
+          rows: tax.monthly.map((m) => [m.month, num(m.output), num(m.input), num(m.net)]),
+        },
+      ]);
     }
     case "expenses": {
       const e = await expensesReport(range);
-      return [
-        toCsv(["category", "count", "total"], e.byCategory.map((c) => [c.name, c.count, c.total])),
-        "",
-        toCsv(["method", "count", "total"], e.byMethod.map((m) => [m.method, m.count, m.total])),
-        "",
-        toCsv(["grandTotal"], [[e.grandTotal]]),
-      ].join("\n");
+      return reportCsv(t, R.expensesReport, range, [
+        {
+          title: R.byCategory,
+          header: [c.category, c.count, t.common.total],
+          rows: e.byCategory.map((x) => [x.nameAr ?? x.name, int(x.count), num(x.total)]),
+        },
+        {
+          title: R.byMethod,
+          header: [c.method, c.count, t.common.total],
+          rows: e.byMethod.map((m) => [methodLabel(m.method, t), int(m.count), num(m.total)]),
+        },
+        kvSection(t, c.totals, [[c.grandTotal, e.grandTotal]]),
+      ]);
     }
     default:
       throw new Error(`Unknown report family: ${family}`);

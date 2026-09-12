@@ -33,6 +33,7 @@ export async function ReportHeader({
           <PdfActions
             targetId="pdf-paper"
             fileName={`${family}-report_${fromISO}_to_${toISO}`}
+            captureWidth={1280}
             labels={{
               sharePdf: t.common.sharePdf,
               generatingPdf: t.common.generatingPdf,

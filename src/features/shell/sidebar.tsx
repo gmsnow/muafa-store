@@ -33,6 +33,7 @@ export function Sidebar({ t, permissions, storeName }: Props) {
   return (
     <aside
       className={cn(
+        "print:hidden",
         "sticky top-0 hidden h-screen shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex",
         collapsed ? "w-[68px]" : "w-64",
       )}

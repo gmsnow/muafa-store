@@ -25,7 +25,10 @@ export interface NavGroup {
 
 /** Resolve a nav item label from either the nav or reports dictionary section. */
 export function navLabel(nav: Dictionary["nav"], reports: Dictionary["reports"], key: NavLabelKey): string {
-  return (nav as Record<string, string>)[key] ?? (reports as Record<string, string>)[key] ?? String(key);
+  const n = nav as Record<string, unknown>;
+  const r = reports as Record<string, unknown>;
+  const resolved = n[key] ?? r[key];
+  return typeof resolved === "string" ? resolved : String(key);
 }
 
 export const NAV_GROUPS: NavGroup[] = [

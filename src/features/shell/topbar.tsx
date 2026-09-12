@@ -54,7 +54,7 @@ export function Topbar({ t, userName, roleName, permissions, notifications, stor
   })).filter((g) => g.items.length > 0);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur print:hidden">
       {/* Mobile nav */}
       <Sheet>
         <SheetTrigger asChild>

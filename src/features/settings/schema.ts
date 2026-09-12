@@ -1,9 +1,18 @@
 import { z } from "zod";
 
+/**
+ * Logo value may be an external URL (legacy) or a stored object path
+ * (uploaded from the device, e.g. `logos/<userId>/<uuid>.png`).
+ */
+const logoUrlField = z.union([
+  z.string().trim().url().max(500),
+  z.string().trim().regex(/^[a-zA-Z0-9][a-zA-Z0-9/_.-]{0,249}$/),
+]);
+
 export const storeSettingsSchema = z.object({
   name: z.string().trim().min(1).max(150),
   nameAr: z.string().trim().max(150).optional().or(z.literal("")),
-  logoUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
+  logoUrl: logoUrlField.optional().or(z.literal("")),
   address: z.string().trim().max(300).optional().or(z.literal("")),
   addressAr: z.string().trim().max(300).optional().or(z.literal("")),
   phone: z.string().trim().max(30).optional().or(z.literal("")),

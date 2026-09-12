@@ -274,7 +274,9 @@ const ar = {
   auditPage: { title: "سجل التدقيق", action: "الإجراء", entity: "الكيان", details: "التفاصيل", ip: "عنوان IP" },
   settingsPage: {
     title: "الإعدادات", storeNameAr: "اسم المتجر",
-    logoUrl: "رابط الشعار", currency: "العملة", currencySymbol: "رمز العملة",
+    logoUrl: "شعار المتجر", logoChoose: "اختر صورة من الجهاز", logoRemove: "إزالة الشعار",
+    logoHint: "تُرفع الصورة إلى تخزين المشروع وتُستخدم كشعار بدل الرابط الخارجي.",
+    currency: "العملة", currencySymbol: "رمز العملة",
     receiptFooter: "تذييل الفاتورة",
     invoicePrefix: "بادئة أرقام الفواتير", expirationWarningDays: "تحذير الانتهاء (أيام)",
     language: "اللغة", dateFormat: "صيغة التاريخ", timezone: "المنطقة الزمنية",

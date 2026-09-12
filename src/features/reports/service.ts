@@ -1,4 +1,5 @@
 import "server-only";
+import ExcelJS from "exceljs";
 import { db } from "@/shared/db";
 import { money } from "@/shared/core/money";
 import { dict, type Dictionary } from "@/shared/i18n";
@@ -780,4 +781,447 @@ export async function exportReportCsv(family: string, range: ReportRange): Promi
     default:
       throw new Error(`Unknown report family: ${family}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// EXCEL EXPORT — styled, sectioned, right-to-left sheets
+// ---------------------------------------------------------------------------
+
+const MONEY_FMT = "#,##0.00";
+const COUNT_FMT = "0";
+
+/** Single workbook with a title band, period band and styled table sections. */
+export async function exportReportWorkbook(family: string, range: ReportRange): Promise<Buffer> {
+  const t = dict();
+  const R = t.reports;
+  const c = R.csv;
+  const subtitle = `${c.period}: ${t.common.from} ${range.fromISO} ${t.common.to} ${range.toISO}`;
+
+  let title = "";
+  let sections: XlSection[] = [];
+
+  switch (family) {
+    case "sales": {
+      const { summary, buckets, byCashier, products } = await salesReport(range);
+      title = R.salesReport;
+      const dayTotals = buckets.reduce(
+        (acc, b) => ({ revenue: acc.revenue + b.revenue, cost: acc.cost + b.cost, profit: acc.profit + b.profit }),
+        { revenue: 0, cost: 0, profit: 0 },
+      );
+      const cashierTotal = byCashier.reduce((a, x) => a + x.total, 0);
+      const cashierCnt = byCashier.reduce((a, x) => a + x.qty, 0);
+      const productTotals = products.reduce(
+        (acc, p) => ({ qty: acc.qty + p.qty, total: acc.total + p.total, profit: acc.profit + p.profit }),
+        { qty: 0, total: 0, profit: 0 },
+      );
+      sections = [
+        xlKvSection(t, c.summary, [
+          [R.invoicesCol, int(summary.invoices)],
+          [R.grossSales, summary.grossSales],
+          [R.returns, summary.returnsTotal],
+          [R.netSales, summary.netSales],
+          [t.common.discount, summary.discounts],
+          [R.cogs, summary.cogs],
+          [R.avgTicket, summary.avgTicket],
+        ]),
+        {
+          title: R.byDay,
+          columns: dateCols(t, c.date),
+          rows: buckets.map((b) => [b.day, money(b.revenue).toNumber(), money(b.cost).toNumber(), money(b.profit).toNumber()]),
+          totals: [[t.common.total, dayTotals.revenue, dayTotals.cost, dayTotals.profit]],
+        },
+        {
+          title: R.cashierReport,
+          columns: [
+            { header: t.usersPage.fullName, width: 30 },
+            { header: R.invoicesCol, width: 14, numFmt: COUNT_FMT },
+            { header: R.netSales, width: 18 },
+          ],
+          rows: byCashier.map((x) => [x.nameAr ?? x.name, x.qty, money(x.total).toNumber()]),
+          totals: [[t.common.total, cashierCnt, money(cashierTotal).toNumber()]],
+        },
+        {
+          title: R.productPerformance,
+          columns: [
+            { header: c.product, width: 34 },
+            { header: R.unitsSold, width: 16 },
+            { header: R.revenueCol, width: 16 },
+            { header: R.grossProfit, width: 16 },
+          ],
+          rows: products.map((p) => [p.nameAr ?? p.name, p.qty, money(p.total).toNumber(), money(p.profit).toNumber()]),
+          totals: [[t.common.total, productTotals.qty, money(productTotals.total).toNumber(), money(productTotals.profit).toNumber()]],
+        },
+      ];
+      break;
+    }
+    case "purchases": {
+      const { summary, buckets, bySupplier } = await purchasesReport(range);
+      title = R.purchasesReport;
+      sections = [
+        xlKvSection(t, c.summary, [
+          [R.docsCount, int(summary.docs)],
+          [c.grossPurchases, summary.gross],
+          [t.common.discount, summary.discounts],
+          [R.totalPaid, summary.paid],
+          [c.due, summary.due],
+          [R.inputTax, summary.inputTax],
+          [R.returns, summary.returnsTotal],
+        ]),
+        {
+          title: R.byDay,
+          columns: dateCols(t, c.date),
+          rows: buckets.map((b) => [b.day, money(b.total).toNumber()]),
+          totals: [[t.common.total, buckets.reduce((a, b) => a + b.total, 0)]],
+        },
+        {
+          title: R.bySupplier,
+          columns: [
+            { header: c.name, width: 30 },
+            { header: R.docsCount, width: 14, numFmt: COUNT_FMT },
+            { header: t.common.total, width: 18 },
+          ],
+          rows: bySupplier.map((s) => [s.nameAr ?? s.name, s.qty, money(s.total).toNumber()]),
+          totals: [[t.common.total, bySupplier.reduce((a, s) => a + s.qty, 0),
+            money(bySupplier.reduce((a, s) => a + s.total, 0)).toNumber()]],
+        },
+      ];
+      break;
+    }
+    case "profit": {
+      const p = await profitReport(range);
+      title = R.profitReport;
+      sections = [
+        xlKvSection(t, c.summary, [
+          [R.netSales, p.netSales],
+          [R.cogs, p.cogs],
+          [R.grossProfit, p.grossProfit],
+          [R.operatingExpenses, p.expenses],
+          [R.netProfit, p.netProfit],
+          [R.margin, `${num(p.marginPercent)}%`],
+        ]),
+        {
+          title: R.byMonth,
+          columns: [
+            { header: c.month, width: 14 },
+            { header: R.netSales, width: 16 },
+            { header: R.cogs, width: 16 },
+            { header: R.grossProfit, width: 16 },
+            { header: R.operatingExpenses, width: 18 },
+            { header: R.netProfit, width: 16 },
+          ],
+          rows: p.monthly.map((m) => [
+            m.month, money(m.sales).toNumber(), money(m.cogs).toNumber(),
+            money(m.grossProfit).toNumber(), money(m.expenses).toNumber(), money(m.netProfit).toNumber(),
+          ]),
+        },
+      ];
+      break;
+    }
+    case "inventory": {
+      const { items, totals } = await inventoryValuation();
+      title = R.inventoryReport;
+      sections = [
+        xlKvSection(t, c.totals, [
+          [R.stockValue, totals.stockValue],
+          [R.retailValue, totals.retailValue],
+          [R.potentialProfit, totals.potentialProfit],
+          [t.dashboard.lowStockProducts, int(totals.lowCount)],
+          [t.dashboard.outOfStock, int(totals.outCount)],
+        ]),
+        {
+          title: t.products.title,
+          columns: [
+            { header: t.products.sku, width: 14 },
+            { header: t.products.name, width: 32 },
+            { header: c.category, width: 20 },
+            { header: t.common.quantity, width: 12, numFmt: COUNT_FMT },
+            { header: t.products.costPrice, width: 14 },
+            { header: R.stockValue, width: 16 },
+            { header: R.retailValue, width: 16 },
+            { header: R.potentialProfit, width: 16 },
+          ],
+          rows: items.map((i) => [i.sku, i.nameAr ?? i.name, i.categoryName, i.quantity,
+            money(i.costPrice).toNumber(), money(i.stockValue).toNumber(),
+            money(i.retailValue).toNumber(), money(i.potentialProfit).toNumber()]),
+        },
+      ];
+      break;
+    }
+    case "customers": {
+      const { items, totals } = await customersReport(range);
+      title = R.customersReport;
+      sections = [
+        xlKvSection(t, c.totals, [
+          [R.receivables, totals.receivables],
+          [R.activeCustomers, int(totals.activeCustomers)],
+          [R.overLimit, int(totals.overLimit)],
+        ]),
+        {
+          title: t.nav.customersList,
+          columns: [
+            { header: c.code, width: 14 },
+            { header: R.customerCol, width: 30 },
+            { header: R.invoicesCol, width: 12, numFmt: COUNT_FMT },
+            { header: c.purchases, width: 16 },
+            { header: c.balance, width: 16 },
+            { header: c.creditLimit, width: 16 },
+          ],
+          rows: items.map((i) => [i.code, i.nameAr ?? i.name, i.invoices,
+            money(i.purchases).toNumber(), money(i.balance).toNumber(), money(i.creditLimit).toNumber()]),
+        },
+      ];
+      break;
+    }
+    case "suppliers": {
+      const { items, totals } = await suppliersReport(range);
+      title = R.suppliersReport;
+      sections = [
+        xlKvSection(t, c.totals, [
+          [R.payables, totals.payables],
+          [R.purchaseVolume, totals.purchaseVolume],
+        ]),
+        {
+          title: t.nav.suppliers,
+          columns: [
+            { header: c.code, width: 14 },
+            { header: R.supplierCol, width: 30 },
+            { header: R.docsCount, width: 12, numFmt: COUNT_FMT },
+            { header: c.purchases, width: 16 },
+            { header: R.returns, width: 14 },
+            { header: c.netPurchases, width: 16 },
+            { header: R.payables, width: 16 },
+          ],
+          rows: items.map((i) => [i.code, i.nameAr ?? i.name, i.docs,
+            money(i.purchases).toNumber(), money(i.returnsTotal).toNumber(),
+            money(i.netPurchases).toNumber(), money(i.balance).toNumber()]),
+          totals: [[t.common.total, "", "", money(items.reduce((a, i) => a + i.purchases, 0)).toNumber(),
+            "", money(items.reduce((a, i) => a + i.netPurchases, 0)).toNumber(), money(totals.payables).toNumber()]],
+        },
+      ];
+      break;
+    }
+    case "tax": {
+      const tax = await taxReport(range);
+      title = R.taxReport;
+      sections = [
+        xlKvSection(t, c.summary, [
+          [R.outputTax, tax.outputTax],
+          [R.inputTax, tax.inputTax],
+          [R.netTaxPayable, tax.netPayable],
+        ]),
+        {
+          title: R.byMonth,
+          columns: [
+            { header: c.month, width: 14 },
+            { header: R.outputTax, width: 16 },
+            { header: R.inputTax, width: 16 },
+            { header: c.netTax, width: 16 },
+          ],
+          rows: tax.monthly.map((m) => [m.month, money(m.output).toNumber(), money(m.input).toNumber(), money(m.net).toNumber()]),
+        },
+      ];
+      break;
+    }
+    case "expenses": {
+      const e = await expensesReport(range);
+      title = R.expensesReport;
+      sections = [
+        {
+          title: R.byCategory,
+          columns: [
+            { header: c.category, width: 32 },
+            { header: c.count, width: 12, numFmt: COUNT_FMT },
+            { header: t.common.total, width: 18 },
+          ],
+          rows: e.byCategory.map((x) => [x.nameAr ?? x.name, x.count, money(x.total).toNumber()]),
+        },
+        {
+          title: R.byMethod,
+          columns: [
+            { header: c.method, width: 24 },
+            { header: c.count, width: 12, numFmt: COUNT_FMT },
+            { header: t.common.total, width: 18 },
+          ],
+          rows: e.byMethod.map((m) => [methodLabel(m.method, t), m.count, money(m.total).toNumber()]),
+        },
+        xlKvSection(t, c.totals, [[c.grandTotal, e.grandTotal]]),
+      ];
+      break;
+    }
+    default:
+      throw new Error(`Unknown report family: ${family}`);
+  }
+
+  return buildReportWorkbook({ title, subtitle, noData: t.common.noData, sections });
+}
+
+interface XlColumn {
+  header: string;
+  width: number;
+  numFmt?: string;
+}
+
+interface XlSection {
+  title: string;
+  columns: XlColumn[];
+  rows: Array<Array<string | number>>;
+  totals?: Array<Array<string | number>>;
+}
+
+interface XlWorkbookSpec {
+  title: string;
+  subtitle: string;
+  noData: string;
+  sections: XlSection[];
+}
+
+function dateCols(t: Dictionary, dateHeader: string): XlColumn[] {
+  return [
+    { header: dateHeader, width: 14 },
+    { header: t.reports.revenueCol, width: 16 },
+    { header: t.reports.cogs, width: 16 },
+    { header: t.reports.grossProfit, width: 16 },
+  ];
+}
+
+function xlKvSection(t: Dictionary, title: string, entries: Array<[string, string | number]>): XlSection {
+  const c = t.reports.csv;
+  return {
+    title,
+    columns: [
+      { header: c.statement, width: 38 },
+      { header: c.value, width: 20 },
+    ],
+    rows: entries.map(([k, v]) => [k, v]),
+  };
+}
+
+const THIN_GRAY: Partial<ExcelJS.Borders> = {
+  top: { style: "thin", color: { argb: "FFCBD5E1" } },
+  left: { style: "thin", color: { argb: "FFCBD5E1" } },
+  bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
+  right: { style: "thin", color: { argb: "FFCBD5E1" } },
+};
+
+async function buildReportWorkbook(spec: XlWorkbookSpec): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Grocery POS";
+  wb.created = new Date();
+  const ws = wb.addWorksheet(spec.title.slice(0, 28), {
+    views: [{ rightToLeft: true, showGridLines: false }],
+  });
+
+  const colCount = Math.max(...spec.sections.map((s) => s.columns.length), 1);
+  const widths = new Array<number>(colCount + 1).fill(11);
+  let r = 0;
+
+  // Title band
+  r++;
+  ws.getRow(r).height = 26;
+  ws.mergeCells(r, 1, r, colCount);
+  for (let css = 1; css <= colCount; css++) {
+    ws.getCell(r, css).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+  }
+  const titleCell = ws.getCell(r, 1);
+  titleCell.value = spec.title;
+  titleCell.font = { bold: true, size: 15, color: { argb: "FFFFFFFF" } };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  // Period band
+  r++;
+  ws.getRow(r).height = 18;
+  ws.mergeCells(r, 1, r, colCount);
+  for (let css = 1; css <= colCount; css++) {
+    ws.getCell(r, css).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+  }
+  const subCell = ws.getCell(r, 1);
+  subCell.value = spec.subtitle;
+  subCell.font = { size: 11, color: { argb: "FF4B5563" } };
+  subCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  for (const section of spec.sections) {
+    // Section heading
+    r++;
+    ws.getRow(r).height = 20;
+    ws.mergeCells(r, 1, r, colCount);
+    for (let css = 1; css <= colCount; css++) {
+      ws.getCell(r, css).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
+      ws.getCell(r, css).border = THIN_GRAY;
+    }
+    const heading = ws.getCell(r, 1);
+    heading.value = section.title;
+    heading.font = { bold: true, size: 11, color: { argb: "FF1E3A8A" } };
+    heading.alignment = { horizontal: "center", vertical: "middle" };
+
+    // Column headers
+    r++;
+    ws.getRow(r).height = 18;
+    section.columns.forEach((col, i) => {
+      const cell = ws.getCell(r, i + 1);
+      cell.value = col.header;
+      cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = THIN_GRAY;
+      widths[i + 1] = Math.max(widths[i + 1], Math.max(col.width, col.header.length + 6));
+    });
+
+    // Data rows
+    if (section.rows.length === 0) {
+      r++;
+      ws.mergeCells(r, 1, r, colCount);
+      const empty = ws.getCell(r, 1);
+      empty.value = spec.noData;
+      empty.font = { italic: true, size: 10, color: { argb: "FF9CA3AF" } };
+      empty.alignment = { horizontal: "center" };
+      ws.getRow(r).height = 18;
+    } else {
+      section.rows.forEach((row, idx) => {
+        r++;
+        ws.getRow(r).height = 16;
+        row.forEach((v, i) => {
+          const col = section.columns[i];
+          const cell = ws.getCell(r, i + 1);
+          cell.value = v;
+          cell.border = THIN_GRAY;
+          if (idx % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+          if (typeof v === "number") {
+            cell.numFmt = col.numFmt ?? MONEY_FMT;
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          } else if (typeof v === "string" && v !== "") {
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          }
+        });
+      });
+    }
+
+    // Totals row(s)
+    if (section.totals?.length) {
+      section.totals.forEach((row) => {
+        r++;
+        ws.getRow(r).height = 18;
+        row.forEach((v, i) => {
+          const col = section.columns[i];
+          const cell = ws.getCell(r, i + 1);
+          cell.value = v;
+          cell.border = THIN_GRAY;
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+          cell.font = { bold: true, size: 10, color: { argb: "FF111827" } };
+          if (typeof v === "number") {
+            cell.numFmt = col.numFmt ?? MONEY_FMT;
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          } else if (typeof v === "string" && v !== "") {
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          }
+        });
+      });
+    }
+  }
+
+  widths.forEach((w, i) => {
+    if (i > 0) ws.getColumn(i).width = w;
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf as ArrayBuffer);
 }

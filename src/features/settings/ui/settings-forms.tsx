@@ -1,7 +1,7 @@
 ﻿"use client";
 import { VoiceInput, VoiceTextarea } from "@/components/voice-input";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ImageError, prepareImage, type PreparedImage } from "@/shared/client/image";
 import type { Dictionary } from "@/shared/i18n";
 
 type ActionKey =
@@ -25,6 +26,8 @@ function useSettingsForm(
   actionKey: ActionKey,
   t: Dictionary,
   transform?: (raw: Record<string, FormDataEntryValue>) => Record<string, FormDataEntryValue>,
+  prepare?: (raw: Record<string, FormDataEntryValue>) => Promise<Record<string, FormDataEntryValue> | false>,
+  onSaved?: () => void,
 ) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -33,12 +36,22 @@ function useSettingsForm(
     e.preventDefault();
     setBusy(true);
     const raw = Object.fromEntries(new FormData(e.currentTarget).entries());
+    let payload = transform ? transform(raw) : raw;
+    if (prepare) {
+      const prepared = await prepare(payload);
+      if (prepared === false) {
+        setBusy(false);
+        return;
+      }
+      payload = prepared;
+    }
     const mod = await import("../actions");
     const res = await (mod[actionKey] as (raw: unknown) => Promise<{ ok: boolean; error?: { message: string } }>)(
-      transform ? transform(raw) : raw,
+      payload,
     );
     setBusy(false);
     if (res.ok) {
+      onSaved?.();
       toast.success(t.settingsPage.saved);
       router.refresh();
     } else {
@@ -67,22 +80,95 @@ export function StoreSettingsForm({
     currencyCode: string; currencySymbol: string; receiptFooter: string | null;
   };
 }) {
-  const { busy, submit } = useSettingsForm("saveStoreSettingsAction", t, (raw) => {
-    // Arabic-only inputs: mirror the Arabic name/address into the canonical EN columns.
-    if (!String(raw.nameAr ?? "").trim() && data.name) raw.name = data.name;
-    else raw.name = raw.nameAr;
-    if (!String(raw.addressAr ?? "").trim() && data.address) raw.address = data.address;
-    else raw.address = raw.addressAr;
-    return raw;
-  });
+  const [logoPick, setLogoPick] = useState<PreparedImage | null>(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
+  const logoInput = useRef<HTMLInputElement>(null);
+
+  const { busy, submit } = useSettingsForm(
+    "saveStoreSettingsAction",
+    t,
+    (raw) => {
+      // Arabic-only inputs: mirror the Arabic name/address into the canonical EN columns.
+      if (!String(raw.nameAr ?? "").trim() && data.name) raw.name = data.name;
+      else raw.name = raw.nameAr;
+      if (!String(raw.addressAr ?? "").trim() && data.address) raw.address = data.address;
+      else raw.address = raw.addressAr;
+      return raw;
+    },
+    async (raw) => {
+      if (!logoPick) return raw;
+      const mod = await import("../actions");
+      const res = await (mod.uploadStoreLogoAction as (raw: unknown) => Promise<{
+        ok: boolean; data?: { path: string }; error?: { message: string };
+      }>)({ dataUrl: logoPick.dataUrl, mime: logoPick.mime });
+      if (!res.ok || !res.data) {
+        toast.error(res.error?.message ?? "Error");
+        return false;
+      }
+      raw.logoUrl = res.data.path;
+      return raw;
+    },
+    () => {
+      // Drop the local pick after a successful save — the persisted raw
+      // now owns the logo so a later edit of other fields won't re-upload.
+      setLogoPick(null);
+      setLogoRemoved(false);
+    },
+  );
+
+  async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      setLogoPick(await prepareImage(file));
+      setLogoRemoved(false);
+    } catch (err) {
+      toast.error(err instanceof ImageError ? err.message : "Could not read image");
+    }
+  }
+
+  function clearLogo() {
+    setLogoPick(null);
+    setLogoRemoved(true);
+  }
+
   const s = t.settingsPage;
+  const hiddenLogo = logoPick ? logoPick.dataUrl : logoRemoved ? "" : (data.logoUrl ?? "");
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">{s.title} — {t.nav.store}</CardTitle></CardHeader>
       <CardContent>
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="logoUrl" value={hiddenLogo} />
           <Field label={s.storeNameAr}><VoiceInput name="nameAr" dir="rtl" defaultValue={data.nameAr ?? data.name ?? ""} required maxLength={150} /></Field>
-          <Field label={s.logoUrl}><Input name="logoUrl" defaultValue={data.logoUrl ?? ""} dir="ltr" placeholder="https://…" /></Field>
+          <Field label={s.logoUrl}>
+            <div className="flex items-center gap-3">
+              {logoPick && (
+                // Local preview only — the stored object lives in a private bucket.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoPick.dataUrl} alt="" className="size-14 shrink-0 rounded-md border bg-muted object-contain" />
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => logoInput.current?.click()}>
+                  {s.logoChoose}
+                </Button>
+                {(logoPick || (!logoRemoved && data.logoUrl)) && (
+                  <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={clearLogo}>
+                    {s.logoRemove}
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={logoInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={onLogoFile}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">{s.logoHint}</p>
+          </Field>
           <Field label={t.common.phone}><Input name="phone" defaultValue={data.phone ?? ""} dir="ltr" maxLength={30} /></Field>
           <div className="sm:col-span-2"><Field label={t.common.address}><VoiceInput name="addressAr" dir="rtl" defaultValue={data.addressAr ?? data.address ?? ""} maxLength={300} /></Field></div>
           <Field label={s.currency}><Input name="currencyCode" defaultValue={data.currencyCode} required maxLength={8} dir="ltr" /></Field>

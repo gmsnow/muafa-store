@@ -1,7 +1,10 @@
 import "server-only";
 import { cache } from "react";
+import { randomUUID } from "node:crypto";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
+import { STORE_ASSET_BUCKET, uploadObject } from "@/shared/supabase-storage";
+import { decodeImageData, extensionForMime, sniffImageMime, type ImageMime } from "@/shared/core/image-data";
 import {
   storeSettingsSchema, salesSettingsSchema, inventorySettingsSchema,
   localizationSettingsSchema, securitySettingsSchema,
@@ -66,6 +69,19 @@ export async function saveStoreSettings(userId: string, raw: unknown) {
   });
   await auditSettings(userId, "StoreSettings", { section: "store" });
   return saved;
+}
+
+/**
+ * Upload a store logo chosen from the device. The browser-crafted data URL is
+ * untrusted, so the bytes are decoded + sniffed server-side, stored in the
+ * private bucket, and only the object path is returned for the settings row.
+ */
+export async function uploadStoreLogo(userId: string, input: { dataUrl: string; mime: string }) {
+  const buffer = decodeImageData(input.dataUrl, input.mime);
+  const mime = sniffImageMime(new Uint8Array(buffer)) as ImageMime;
+  const path = `logos/${userId}/${randomUUID()}.${extensionForMime(mime)}`;
+  const { path: savedPath } = await uploadObject(STORE_ASSET_BUCKET, path, new Uint8Array(buffer), mime);
+  return { path: savedPath };
 }
 
 export async function saveSalesSettings(userId: string, raw: unknown) {

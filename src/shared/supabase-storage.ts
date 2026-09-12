@@ -13,6 +13,9 @@ import { AppError } from "@/shared/core/api-response";
 
 export const TXN_IMAGE_BUCKET = "transaction-images";
 
+/** Private bucket for store-picked assets (logo, etc.). */
+export const STORE_ASSET_BUCKET = "store-assets";
+
 let client: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {

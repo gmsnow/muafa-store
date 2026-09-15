@@ -45,6 +45,7 @@ export function PdfActions({
   labels,
   captureWidth,
   decorate = false,
+  margins = false,
 }: {
   fileName: string;
   targetId?: string;
@@ -60,6 +61,11 @@ export function PdfActions({
    * Turned on for reports; receipts keep the full-bleed thermal layout.
    */
   decorate?: boolean;
+  /**
+   * A4 white margins around the document (no footer). Gives statements the
+   * classic printed look instead of touching the page edges.
+   */
+  margins?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const blobCacheRef = useRef<Promise<Blob> | null>(null);
@@ -76,9 +82,10 @@ export function PdfActions({
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
 
-    const marginX = decorate ? 10 : 0;
-    const marginTop = decorate ? 12 : 0;
-    const marginBottom = decorate ? 15 : 0;
+    const withMargins = decorate || margins;
+    const marginX = withMargins ? 10 : 0;
+    const marginTop = withMargins ? 12 : 0;
+    const marginBottom = decorate ? 15 : margins ? 12 : 0;
     const imgW = pageW - marginX * 2;
     const usableH = pageH - marginTop - marginBottom;
 
@@ -179,7 +186,7 @@ export function PdfActions({
       if (decorate) drawFooter(pdf, i + 1, pages, pageW, pageH, marginX, marginBottom, fileName);
     }
     return pdf.output("blob");
-  }, [targetId, captureWidth, decorate, fileName]);
+  }, [targetId, captureWidth, decorate, margins, fileName]);
 
   const getCachedBlob = useCallback((): Promise<Blob> => {
     blobCacheRef.current ??= buildPdfBlob();

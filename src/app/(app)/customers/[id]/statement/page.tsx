@@ -123,6 +123,7 @@ export default async function CustomerStatementPage({
           fileName={`statement-${customer.code}`}
           targetId="stmt-paper"
           captureWidth={880}
+          margins
           labels={{
             sharePdf: t.common.sharePdf,
             generatingPdf: t.common.generatingPdf,

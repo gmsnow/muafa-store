@@ -13,6 +13,38 @@ export type PdfActionLabels = {
   downloadFallback?: string;
 };
 
+/**
+ * Split content height into page-height segments that never cut through a
+ * table row. Each segment ends at the last row start (from `breaks`) that
+ * fits within `bandHz`, skipping up to 20px past the page end for long rows
+ * that barely miss it. Falls back to fixed-height bands when no row
+ * boundaries were measured.
+ */
+function planSegments(breaks: number[], bandHz: number, end: number): Array<[number, number]> {
+  const sorted = Array.from(new Set(breaks)).sort((a, b) => a - b);
+  const segments: Array<[number, number]> = [];
+  let start = 0;
+  while (start < end - 0.5) {
+    const target = Math.min(start + bandHz, end);
+    let segmentEnd = -1;
+    for (const b of sorted) {
+      if (b > start + 0.5 && b <= target) segmentEnd = b;
+    }
+    if (segmentEnd <= 0) {
+      for (const b of sorted) {
+        if (b > start + 0.5) {
+          segmentEnd = Math.min(b, target + 20);
+          break;
+        }
+      }
+      if (segmentEnd <= 0) segmentEnd = target;
+    }
+    segments.push([start, segmentEnd]);
+    start = segmentEnd;
+  }
+  return segments;
+}
+
 /** Thin rule + "1 / N" page number + filename in the bottom margin band. */
 function drawFooter(
   pdf: import("jspdf").jsPDF,
@@ -108,7 +140,13 @@ export function PdfActions({
     // sidebar/padding), and the extra white area would appear as margins in the
     // PDF. The clone is restyled so the element gets the full emulated width;
     // each band is then cropped to that box so content spans the full page.
-    const measured = { left: 0, top: 0, width: windowW, height: Math.max(el.offsetHeight, 1) };
+    const measured = {
+      left: 0,
+      top: 0,
+      width: windowW,
+      height: Math.max(el.offsetHeight, 1),
+      breaks: [] as number[],
+    };
 
     const restyleAndMeasure = (doc: Document) => {
       const paper = doc.getElementById(targetId);
@@ -137,6 +175,17 @@ export function PdfActions({
         measured.width = r.width;
         measured.height = Math.max(paper.scrollHeight, 1);
       }
+      // Record where each table row starts relative to the paper top so page
+      // breaks never slice through a row (see planSegments below).
+      const breaks: number[] = [];
+      const rows = doc.querySelectorAll(`${targetId} tr`);
+      for (const row of Array.from(rows)) {
+        const rr = row.getBoundingClientRect();
+        if (rr.height > 0 && rr.top >= r.top - 0.5) {
+          breaks.push(Math.round(rr.top - r.top));
+        }
+      }
+      if (breaks.length) measured.breaks = breaks;
     };
 
     const probeH = Math.max(1, Math.min(el.offsetHeight, 1250));
@@ -159,12 +208,16 @@ export function PdfActions({
     // canvas — giant canvases exceed mobile (iOS) canvas size limits and render
     // blank, which showed up as an empty table on long statements.
     const bandHz = (usableH * measured.width) / imgW;
-    const pages = Math.max(1, Math.ceil(measured.height / bandHz));
+    // Split the content into page-height segments that never cut through a
+    // table row: each segment ends at the last row start that fits within
+    // bandHz. Falls back to fixed-height bands when no rows were measured.
+    const segments = planSegments(measured.breaks, bandHz, measured.height);
+    const pages = segments.length;
 
     const capture = (i: number) => {
-      const pageOffset = i > 0 ? Math.floor(i * bandHz) : 0;
-      const y = measured.top + pageOffset;
-      const bandH = Math.min(measured.height - pageOffset, bandHz);
+      const [segStart, segEnd] = segments[i];
+      const y = measured.top + segStart;
+      const bandH = segEnd - segStart;
       return html2canvas(el, {
         scale,
         backgroundColor: "#ffffff",

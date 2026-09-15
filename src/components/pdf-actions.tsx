@@ -71,11 +71,6 @@ export function PdfActions({
     ]);
     const el = document.getElementById(targetId);
     if (!el) throw new Error(`#${targetId} not found`);
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      ...(captureWidth ? { windowWidth: Math.max(captureWidth, el.offsetWidth) } : {}),
-    });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     pdf.setProperties({ title: fileName, subject: fileName, creator: "Muafa Store" });
     const pageW = pdf.internal.pageSize.getWidth();
@@ -87,26 +82,40 @@ export function PdfActions({
     const imgW = pageW - marginX * 2;
     const usableH = pageH - marginTop - marginBottom;
 
-    // Horizontal content band (in canvas px) that maps to one A4 page when the
-    // full width is scaled to imgW. Pages are cropped bands of the single
-    // capture, so long reports flow onto as many pages as the height needs.
-    const pxPage = (usableH * canvas.width) / imgW;
-    const pages = Math.max(1, Math.ceil(canvas.height / pxPage));
-
-    const sliceCanvas = document.createElement("canvas");
-    const sliceCtx = sliceCanvas.getContext("2d");
-    if (!sliceCtx) throw new Error("Canvas 2D context unavailable");
-    sliceCanvas.width = canvas.width;
+    const scale = 2;
+    // Fixed viewport width emulated while capturing (html2canvas windowWidth).
+    // Keeps PDF layout identical on phones instead of capturing the narrow
+    // mobile layout stretched over A4 (giant fonts).
+    const windowW = captureWidth ? Math.max(captureWidth, el.offsetWidth) : el.offsetWidth;
+    // Content height (css px) that maps to one A4 usable page when scaled to imgW.
+    // Each page is captured as its OWN small canvas band instead of one giant
+    // canvas — giant canvases exceed mobile (iOS) canvas size limits and render
+    // blank, which showed up as an empty table on long statements.
+    const bandPx = (usableH * windowW) / imgW;
+    const totalPx = el.offsetHeight;
+    const pages = Math.max(1, Math.ceil(totalPx / bandPx));
 
     for (let i = 0; i < pages; i++) {
-      const y = Math.floor(i * pxPage);
-      const sliceH = Math.min(canvas.height - y, pxPage);
-      sliceCanvas.height = Math.ceil(sliceH);
-      sliceCtx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-      sliceCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-      const sliceMmH = (sliceH * imgW) / canvas.width;
+      const y = i > 0 ? Math.floor(i * bandPx) : 0;
+      const bandH = Math.min(totalPx - y, bandPx);
+      const canvas = await html2canvas(el, {
+        scale,
+        backgroundColor: "#ffffff",
+        windowWidth: windowW,
+        windowHeight: bandH,
+        x: 0,
+        y,
+        width: windowW,
+        height: bandH,
+        scrollX: 0,
+        scrollY: y,
+      });
+      const cW = canvas.width;
+      const cH = canvas.height;
+      if (!cW || !cH) continue;
+      const mmH = (cH * imgW) / cW;
       if (i > 0) pdf.addPage();
-      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, sliceMmH, undefined, "FAST");
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, mmH, undefined, "FAST");
       if (decorate) drawFooter(pdf, i + 1, pages, pageW, pageH, marginX, marginBottom, fileName);
     }
     return pdf.output("blob");

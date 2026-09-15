@@ -119,6 +119,7 @@ export default async function CustomerStatementPage({
             </Button>
           )}
           <PdfActions
+          key={`${customer.id}:${from?.toISOString() ?? "all"}:${to?.toISOString() ?? "all"}`}
           fileName={`statement-${customer.code}`}
           targetId="stmt-paper"
           captureWidth={880}

@@ -87,35 +87,73 @@ export function PdfActions({
     // Keeps PDF layout identical on phones instead of capturing the narrow
     // mobile layout stretched over A4 (giant fonts).
     const windowW = captureWidth ? Math.max(captureWidth, el.offsetWidth) : el.offsetWidth;
+    // Measure the element's rendered box inside the emulated viewport. It often
+    // doesn't fill the full emulated width (the app container caps it), and the
+    // extra white area would appear as margins in the PDF. Cropping each band to
+    // the measured box makes the content span the full page width.
+    const measured = { left: 0, top: 0, width: windowW, height: Math.max(el.offsetHeight, 1) };
+    const probeH = Math.max(1, Math.min(el.offsetHeight, 1250));
+    const probe = await html2canvas(el, {
+      scale,
+      backgroundColor: "#ffffff",
+      windowWidth: windowW,
+      windowHeight: probeH,
+      x: 0,
+      y: 0,
+      width: windowW,
+      height: probeH,
+      scrollX: 0,
+      scrollY: 0,
+      onclone: (doc) => {
+        const c = doc.getElementById(targetId);
+        if (!c) return;
+        const r = c.getBoundingClientRect();
+        if (r.width > 0) {
+          measured.left = r.left;
+          measured.top = r.top;
+          measured.width = r.width;
+          measured.height = Math.max(c.scrollHeight, 1);
+        }
+      },
+    });
+    void probe;
     // Content height (css px) that maps to one A4 usable page when scaled to imgW.
     // Each page is captured as its OWN small canvas band instead of one giant
     // canvas — giant canvases exceed mobile (iOS) canvas size limits and render
     // blank, which showed up as an empty table on long statements.
-    const bandPx = (usableH * windowW) / imgW;
-    const totalPx = el.offsetHeight;
-    const pages = Math.max(1, Math.ceil(totalPx / bandPx));
+    const bandHz = (usableH * measured.width) / imgW;
+    const pages = Math.max(1, Math.ceil(measured.height / bandHz));
 
-    for (let i = 0; i < pages; i++) {
-      const y = i > 0 ? Math.floor(i * bandPx) : 0;
-      const bandH = Math.min(totalPx - y, bandPx);
-      const canvas = await html2canvas(el, {
+    const capture = (i: number) => {
+      const pageOffset = i > 0 ? Math.floor(i * bandHz) : 0;
+      const y = measured.top + pageOffset;
+      const bandH = Math.min(measured.height - pageOffset, bandHz);
+      return html2canvas(el, {
         scale,
         backgroundColor: "#ffffff",
         windowWidth: windowW,
         windowHeight: bandH,
-        x: 0,
+        x: measured.left,
         y,
-        width: windowW,
+        width: measured.width,
         height: bandH,
         scrollX: 0,
         scrollY: y,
       });
+    };
+
+    let canvas = await capture(0);
+    for (let i = 0; i < pages; i++) {
+      if (i > 0) {
+        canvas = await capture(i);
+        pdf.addPage();
+      }
       const cW = canvas.width;
       const cH = canvas.height;
-      if (!cW || !cH) continue;
-      const mmH = (cH * imgW) / cW;
-      if (i > 0) pdf.addPage();
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, mmH, undefined, "FAST");
+      if (cW && cH) {
+        const mmH = (cH * imgW) / cW;
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, mmH, undefined, "FAST");
+      }
       if (decorate) drawFooter(pdf, i + 1, pages, pageW, pageH, marginX, marginBottom, fileName);
     }
     return pdf.output("blob");

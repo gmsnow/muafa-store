@@ -83,6 +83,9 @@ export function PdfActions({
     ]);
     const el = document.getElementById(targetId);
     if (!el) throw new Error(`#${targetId} not found`);
+    // Wait for web fonts (Cairo etc.) so the PDF typography matches the screen.
+    // Without this, the capture can run on a fallback font and look"different".
+    if (document.fonts?.ready) await document.fonts.ready;
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     pdf.setProperties({ title: fileName, subject: fileName, creator: "Muafa Store" });
     const pageW = pdf.internal.pageSize.getWidth();

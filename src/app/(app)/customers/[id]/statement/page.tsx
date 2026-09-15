@@ -124,6 +124,7 @@ export default async function CustomerStatementPage({
           targetId="stmt-paper"
           captureWidth={880}
           margins
+          sideMarginMm={18}
           labels={{
             sharePdf: t.common.sharePdf,
             generatingPdf: t.common.generatingPdf,

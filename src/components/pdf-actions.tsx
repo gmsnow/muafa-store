@@ -46,6 +46,7 @@ export function PdfActions({
   captureWidth,
   decorate = false,
   margins = false,
+  sideMarginMm = 10,
 }: {
   fileName: string;
   targetId?: string;
@@ -66,6 +67,11 @@ export function PdfActions({
    * classic printed look instead of touching the page edges.
    */
   margins?: boolean;
+  /**
+   * Left/right page margin in mm (when margins or decorate are enabled).
+   * Defaults to 10 mm.
+   */
+  sideMarginMm?: number;
 }) {
   const [busy, setBusy] = useState(false);
   const blobCacheRef = useRef<Promise<Blob> | null>(null);
@@ -83,7 +89,7 @@ export function PdfActions({
     const pageH = pdf.internal.pageSize.getHeight();
 
     const withMargins = decorate || margins;
-    const marginX = withMargins ? 10 : 0;
+    const marginX = withMargins ? sideMarginMm : 0;
     const marginTop = withMargins ? 12 : 0;
     const marginBottom = decorate ? 15 : margins ? 12 : 0;
     const imgW = pageW - marginX * 2;
@@ -186,7 +192,7 @@ export function PdfActions({
       if (decorate) drawFooter(pdf, i + 1, pages, pageW, pageH, marginX, marginBottom, fileName);
     }
     return pdf.output("blob");
-  }, [targetId, captureWidth, decorate, margins, fileName]);
+  }, [targetId, captureWidth, decorate, margins, sideMarginMm, fileName]);
 
   const getCachedBlob = useCallback((): Promise<Blob> => {
     blobCacheRef.current ??= buildPdfBlob();

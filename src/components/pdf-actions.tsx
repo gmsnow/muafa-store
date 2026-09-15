@@ -97,29 +97,23 @@ export function PdfActions({
     const restyleAndMeasure = (doc: Document) => {
       const paper = doc.getElementById(targetId);
       if (!paper) return;
-      const chain = new Set<Element>();
-      let n: Element | null = paper;
-      while (n && n !== doc.body) {
-        chain.add(n);
-        n = n.parentElement;
-      }
-      for (const child of Array.from(doc.body.children)) {
-        if (!chain.has(child)) (child as HTMLElement).style.display = "none";
-      }
-      for (const ancestor of chain) {
-        if (ancestor === paper) continue;
-        const h = ancestor as HTMLElement;
-        h.style.maxWidth = "none";
-        h.style.margin = "0";
-        h.style.padding = "0";
-        h.style.width = "100%";
-        h.style.flex = "1 1 auto";
-        h.style.boxSizing = "border-box";
-      }
+      // Render the element in isolation: drop the whole app shell (sidebar,
+      // paddings, flex wrappers). Inside the flex layout the forced width
+      // overflows left in RTL, which html2canvas right-anchors — the PDF then
+      // shows content pushed to the right with a big empty left gap.
+      doc.body.innerHTML = "";
+      doc.body.appendChild(paper);
+      doc.body.style.margin = "0";
+      doc.body.style.padding = "0";
+      doc.body.style.width = `${windowW}px`;
+      doc.body.style.overflow = "hidden";
       paper.style.maxWidth = "none";
       paper.style.width = `${windowW}px`;
       paper.style.boxSizing = "border-box";
-      paper.style.margin = "0 auto";
+      paper.style.margin = "0";
+      paper.style.position = "static";
+      if (doc.documentElement) doc.documentElement.scrollLeft = 0;
+      doc.body.scrollLeft = 0;
       const r = paper.getBoundingClientRect();
       if (r.width > 0) {
         measured.left = r.left;

@@ -124,11 +124,25 @@ export function PdfActions({
         if (alive) blobCacheRef.current = null;
       });
     }, 800);
+    // The cached blob is only valid while #targetId shows the same content.
+    // Soft navigations (e.g. customer period filter → full statement) keep this
+    // component mounted, so without this the share could hand back a stale PDF
+    // of what was on screen before. Watch the element and drop the cache
+    // whenever its content changes; the next share rebuilds fresh.
+    const el = document.getElementById(targetId);
+    let observer: MutationObserver | null = null;
+    if (el) {
+      observer = new MutationObserver(() => {
+        blobCacheRef.current = null;
+      });
+      observer.observe(el, { childList: true, subtree: true, characterData: true });
+    }
     return () => {
       alive = false;
       window.clearTimeout(timer);
+      observer?.disconnect();
     };
-  }, [getCachedBlob]);
+  }, [getCachedBlob, targetId]);
 
   const triggerDownload = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);

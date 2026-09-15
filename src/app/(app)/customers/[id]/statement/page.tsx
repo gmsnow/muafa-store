@@ -119,12 +119,9 @@ export default async function CustomerStatementPage({
             </Button>
           )}
           <PdfActions
-          key={`${customer.id}:${from?.toISOString() ?? "all"}:${to?.toISOString() ?? "all"}`}
           fileName={`statement-${customer.code}`}
           targetId="stmt-paper"
           captureWidth={880}
-          margins
-          sideMarginMm={18}
           labels={{
             sharePdf: t.common.sharePdf,
             generatingPdf: t.common.generatingPdf,

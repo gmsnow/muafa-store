@@ -13,38 +13,6 @@ export type PdfActionLabels = {
   downloadFallback?: string;
 };
 
-/**
- * Split content height into page-height segments that never cut through a
- * table row. Each segment ends at the last row start (from `breaks`) that
- * fits within `bandHz`, skipping up to 20px past the page end for long rows
- * that barely miss it. Falls back to fixed-height bands when no row
- * boundaries were measured.
- */
-function planSegments(breaks: number[], bandHz: number, end: number): Array<[number, number]> {
-  const sorted = Array.from(new Set(breaks)).sort((a, b) => a - b);
-  const segments: Array<[number, number]> = [];
-  let start = 0;
-  while (start < end - 0.5) {
-    const target = Math.min(start + bandHz, end);
-    let segmentEnd = -1;
-    for (const b of sorted) {
-      if (b > start + 0.5 && b <= target) segmentEnd = b;
-    }
-    if (segmentEnd <= 0) {
-      for (const b of sorted) {
-        if (b > start + 0.5) {
-          segmentEnd = Math.min(b, target + 20);
-          break;
-        }
-      }
-      if (segmentEnd <= 0) segmentEnd = target;
-    }
-    segments.push([start, segmentEnd]);
-    start = segmentEnd;
-  }
-  return segments;
-}
-
 /** Thin rule + "1 / N" page number + filename in the bottom margin band. */
 function drawFooter(
   pdf: import("jspdf").jsPDF,
@@ -77,8 +45,6 @@ export function PdfActions({
   labels,
   captureWidth,
   decorate = false,
-  margins = false,
-  sideMarginMm = 10,
 }: {
   fileName: string;
   targetId?: string;
@@ -94,16 +60,6 @@ export function PdfActions({
    * Turned on for reports; receipts keep the full-bleed thermal layout.
    */
   decorate?: boolean;
-  /**
-   * A4 white margins around the document (no footer). Gives statements the
-   * classic printed look instead of touching the page edges.
-   */
-  margins?: boolean;
-  /**
-   * Left/right page margin in mm (when margins or decorate are enabled).
-   * Defaults to 10 mm.
-   */
-  sideMarginMm?: number;
 }) {
   const [busy, setBusy] = useState(false);
   const blobCacheRef = useRef<Promise<Blob> | null>(null);
@@ -115,140 +71,46 @@ export function PdfActions({
     ]);
     const el = document.getElementById(targetId);
     if (!el) throw new Error(`#${targetId} not found`);
-    // Wait for web fonts (Cairo etc.) so the PDF typography matches the screen.
-    // Without this, the capture can run on a fallback font and look"different".
-    if (document.fonts?.ready) await document.fonts.ready;
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      ...(captureWidth ? { windowWidth: Math.max(captureWidth, el.offsetWidth) } : {}),
+    });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     pdf.setProperties({ title: fileName, subject: fileName, creator: "Muafa Store" });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
 
-    const withMargins = decorate || margins;
-    const marginX = withMargins ? sideMarginMm : 0;
-    const marginTop = withMargins ? 12 : 0;
-    const marginBottom = decorate ? 15 : margins ? 12 : 0;
+    const marginX = decorate ? 10 : 0;
+    const marginTop = decorate ? 12 : 0;
+    const marginBottom = decorate ? 15 : 0;
     const imgW = pageW - marginX * 2;
     const usableH = pageH - marginTop - marginBottom;
 
-    const scale = 2;
-    // Fixed viewport width emulated while capturing (html2canvas windowWidth).
-    // Keeps PDF layout identical on phones instead of capturing the narrow
-    // mobile layout stretched over A4 (giant fonts).
-    const windowW = captureWidth ? Math.max(captureWidth, el.offsetWidth) : el.offsetWidth;
-    // Measure the element's rendered box inside the emulated viewport. It often
-    // doesn't fill the full emulated width (the app layout squeezes it with a
-    // sidebar/padding), and the extra white area would appear as margins in the
-    // PDF. The clone is restyled so the element gets the full emulated width;
-    // each band is then cropped to that box so content spans the full page.
-    const measured = {
-      left: 0,
-      top: 0,
-      width: windowW,
-      height: Math.max(el.offsetHeight, 1),
-      breaks: [] as number[],
-    };
+    // Horizontal content band (in canvas px) that maps to one A4 page when the
+    // full width is scaled to imgW. Pages are cropped bands of the single
+    // capture, so long reports flow onto as many pages as the height needs.
+    const pxPage = (usableH * canvas.width) / imgW;
+    const pages = Math.max(1, Math.ceil(canvas.height / pxPage));
 
-    const restyleAndMeasure = (doc: Document) => {
-      const paper = doc.getElementById(targetId);
-      if (!paper) return;
-      // Render the element in isolation: drop the whole app shell (sidebar,
-      // paddings, flex wrappers). Inside the flex layout the forced width
-      // overflows left in RTL, which html2canvas right-anchors — the PDF then
-      // shows content pushed to the right with a big empty left gap.
-      doc.body.innerHTML = "";
-      doc.body.appendChild(paper);
-      doc.body.style.margin = "0";
-      doc.body.style.padding = "0";
-      doc.body.style.width = `${windowW}px`;
-      doc.body.style.overflow = "hidden";
-      paper.style.maxWidth = "none";
-      paper.style.width = `${windowW}px`;
-      paper.style.boxSizing = "border-box";
-      paper.style.margin = "0";
-      paper.style.position = "static";
-      if (doc.documentElement) doc.documentElement.scrollLeft = 0;
-      doc.body.scrollLeft = 0;
-      const r = paper.getBoundingClientRect();
-      if (r.width > 0) {
-        measured.left = r.left;
-        measured.top = r.top;
-        measured.width = r.width;
-        measured.height = Math.max(paper.scrollHeight, 1);
-      }
-      // Record where each table row starts relative to the paper top so page
-      // breaks never slice through a row (see planSegments below).
-      const breaks: number[] = [];
-      const rows = doc.querySelectorAll(`${targetId} tr`);
-      for (const row of Array.from(rows)) {
-        const rr = row.getBoundingClientRect();
-        if (rr.height > 0 && rr.top >= r.top - 0.5) {
-          breaks.push(Math.round(rr.top - r.top));
-        }
-      }
-      if (breaks.length) measured.breaks = breaks;
-    };
+    const sliceCanvas = document.createElement("canvas");
+    const sliceCtx = sliceCanvas.getContext("2d");
+    if (!sliceCtx) throw new Error("Canvas 2D context unavailable");
+    sliceCanvas.width = canvas.width;
 
-    const probeH = Math.max(1, Math.min(el.offsetHeight, 1250));
-    const probe = await html2canvas(el, {
-      scale,
-      backgroundColor: "#ffffff",
-      windowWidth: windowW,
-      windowHeight: probeH,
-      x: 0,
-      y: 0,
-      width: windowW,
-      height: probeH,
-      scrollX: 0,
-      scrollY: 0,
-      onclone: restyleAndMeasure,
-    });
-    void probe;
-    // Content height (css px) that maps to one A4 usable page when scaled to imgW.
-    // Each page is captured as its OWN small canvas band instead of one giant
-    // canvas — giant canvases exceed mobile (iOS) canvas size limits and render
-    // blank, which showed up as an empty table on long statements.
-    const bandHz = (usableH * measured.width) / imgW;
-    // Split the content into page-height segments that never cut through a
-    // table row: each segment ends at the last row start that fits within
-    // bandHz. Falls back to fixed-height bands when no rows were measured.
-    const segments = planSegments(measured.breaks, bandHz, measured.height);
-    const pages = segments.length;
-
-    const capture = (i: number) => {
-      const [segStart, segEnd] = segments[i];
-      const y = measured.top + segStart;
-      const bandH = segEnd - segStart;
-      return html2canvas(el, {
-        scale,
-        backgroundColor: "#ffffff",
-        windowWidth: windowW,
-        windowHeight: bandH,
-        x: measured.left,
-        y,
-        width: measured.width,
-        height: bandH,
-        scrollX: 0,
-        scrollY: y,
-        onclone: restyleAndMeasure,
-      });
-    };
-
-    let canvas = await capture(0);
     for (let i = 0; i < pages; i++) {
-      if (i > 0) {
-        canvas = await capture(i);
-        pdf.addPage();
-      }
-      const cW = canvas.width;
-      const cH = canvas.height;
-      if (cW && cH) {
-        const mmH = (cH * imgW) / cW;
-        pdf.addImage(canvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, mmH, undefined, "FAST");
-      }
+      const y = Math.floor(i * pxPage);
+      const sliceH = Math.min(canvas.height - y, pxPage);
+      sliceCanvas.height = Math.ceil(sliceH);
+      sliceCtx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      sliceCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      const sliceMmH = (sliceH * imgW) / canvas.width;
+      if (i > 0) pdf.addPage();
+      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", marginX, marginTop, imgW, sliceMmH, undefined, "FAST");
       if (decorate) drawFooter(pdf, i + 1, pages, pageW, pageH, marginX, marginBottom, fileName);
     }
     return pdf.output("blob");
-  }, [targetId, captureWidth, decorate, margins, sideMarginMm, fileName]);
+  }, [targetId, captureWidth, decorate, fileName]);
 
   const getCachedBlob = useCallback((): Promise<Blob> => {
     blobCacheRef.current ??= buildPdfBlob();
@@ -257,36 +119,16 @@ export function PdfActions({
 
   useEffect(() => {
     let alive = true;
-    let retryTimer: number | undefined;
-
-    const prebuild = () => {
+    const timer = window.setTimeout(() => {
       getCachedBlob().catch(() => {
         if (alive) blobCacheRef.current = null;
       });
-    };
-
-    const invalidate = () => {
-      blobCacheRef.current = null;
-      if (retryTimer) window.clearTimeout(retryTimer);
-      retryTimer = window.setTimeout(() => {
-        if (alive) prebuild();
-      }, 400);
-    };
-
-    const el = document.getElementById(targetId);
-    const observer = el
-      ? new MutationObserver(invalidate)
-      : undefined;
-    observer?.observe(el!, { childList: true, characterData: true, subtree: true });
-
-    const timer = window.setTimeout(prebuild, 800);
+    }, 800);
     return () => {
       alive = false;
-      observer?.disconnect();
       window.clearTimeout(timer);
-      if (retryTimer) window.clearTimeout(retryTimer);
     };
-  }, [getCachedBlob, targetId]);
+  }, [getCachedBlob]);
 
   const triggerDownload = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);

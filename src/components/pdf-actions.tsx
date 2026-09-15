@@ -119,16 +119,36 @@ export function PdfActions({
 
   useEffect(() => {
     let alive = true;
-    const timer = window.setTimeout(() => {
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const prebuild = () => {
       getCachedBlob().catch(() => {
         if (alive) blobCacheRef.current = null;
       });
-    }, 800);
+    };
+
+    const invalidate = () => {
+      blobCacheRef.current = null;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(() => {
+        if (alive) prebuild();
+      }, 400);
+    };
+
+    const el = document.getElementById(targetId);
+    const observer = el
+      ? new MutationObserver(invalidate)
+      : undefined;
+    observer?.observe(el!, { childList: true, characterData: true, subtree: true });
+
+    const timer = window.setTimeout(prebuild, 800);
     return () => {
       alive = false;
+      observer?.disconnect();
       window.clearTimeout(timer);
+      if (retryTimer) window.clearTimeout(retryTimer);
     };
-  }, [getCachedBlob]);
+  }, [getCachedBlob, targetId]);
 
   const triggerDownload = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);

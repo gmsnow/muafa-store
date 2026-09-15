@@ -50,5 +50,8 @@ skills-lock.json
 # local backups produced by the app
 /backups/
 
+# local dev logs
+.next-dev.log
+
 .vercel
 .env*

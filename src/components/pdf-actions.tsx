@@ -88,10 +88,47 @@ export function PdfActions({
     // mobile layout stretched over A4 (giant fonts).
     const windowW = captureWidth ? Math.max(captureWidth, el.offsetWidth) : el.offsetWidth;
     // Measure the element's rendered box inside the emulated viewport. It often
-    // doesn't fill the full emulated width (the app container caps it), and the
-    // extra white area would appear as margins in the PDF. Cropping each band to
-    // the measured box makes the content span the full page width.
+    // doesn't fill the full emulated width (the app layout squeezes it with a
+    // sidebar/padding), and the extra white area would appear as margins in the
+    // PDF. The clone is restyled so the element gets the full emulated width;
+    // each band is then cropped to that box so content spans the full page.
     const measured = { left: 0, top: 0, width: windowW, height: Math.max(el.offsetHeight, 1) };
+
+    const restyleAndMeasure = (doc: Document) => {
+      const paper = doc.getElementById(targetId);
+      if (!paper) return;
+      const chain = new Set<Element>();
+      let n: Element | null = paper;
+      while (n && n !== doc.body) {
+        chain.add(n);
+        n = n.parentElement;
+      }
+      for (const child of Array.from(doc.body.children)) {
+        if (!chain.has(child)) (child as HTMLElement).style.display = "none";
+      }
+      for (const ancestor of chain) {
+        if (ancestor === paper) continue;
+        const h = ancestor as HTMLElement;
+        h.style.maxWidth = "none";
+        h.style.margin = "0";
+        h.style.padding = "0";
+        h.style.width = "100%";
+        h.style.flex = "1 1 auto";
+        h.style.boxSizing = "border-box";
+      }
+      paper.style.maxWidth = "none";
+      paper.style.width = `${windowW}px`;
+      paper.style.boxSizing = "border-box";
+      paper.style.margin = "0 auto";
+      const r = paper.getBoundingClientRect();
+      if (r.width > 0) {
+        measured.left = r.left;
+        measured.top = r.top;
+        measured.width = r.width;
+        measured.height = Math.max(paper.scrollHeight, 1);
+      }
+    };
+
     const probeH = Math.max(1, Math.min(el.offsetHeight, 1250));
     const probe = await html2canvas(el, {
       scale,
@@ -104,17 +141,7 @@ export function PdfActions({
       height: probeH,
       scrollX: 0,
       scrollY: 0,
-      onclone: (doc) => {
-        const c = doc.getElementById(targetId);
-        if (!c) return;
-        const r = c.getBoundingClientRect();
-        if (r.width > 0) {
-          measured.left = r.left;
-          measured.top = r.top;
-          measured.width = r.width;
-          measured.height = Math.max(c.scrollHeight, 1);
-        }
-      },
+      onclone: restyleAndMeasure,
     });
     void probe;
     // Content height (css px) that maps to one A4 usable page when scaled to imgW.
@@ -139,6 +166,7 @@ export function PdfActions({
         height: bandH,
         scrollX: 0,
         scrollY: y,
+        onclone: restyleAndMeasure,
       });
     };
 

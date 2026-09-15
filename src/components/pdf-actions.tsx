@@ -128,7 +128,7 @@ export function PdfActions({
 
   useEffect(() => {
     let alive = true;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryTimer: number | undefined;
 
     const prebuild = () => {
       getCachedBlob().catch(() => {

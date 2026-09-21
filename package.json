@@ -16,6 +16,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "db:dedupe-txns": "tsx scripts/dedupe-customer-txns.ts",
+    "smoke:dupe-guard": "tsx scripts/smoke-dupe-guard.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -151,15 +151,18 @@ export async function flushOutbox(): Promise<FlushResult> {
   for (const item of items) {
     try {
       let ok = false;
+      const rawPayload = (item.payload ?? {}) as Record<string, unknown>;
+      // Legacy queued items predate clientId — stamp a stable key so replays
+      // are idempotent even for an item whose response was lost after commit.
+      const clientId = String(rawPayload.clientId ?? "") || item.id;
       if (item.kind === "SALE") {
         const { checkoutAction } = await import("@/features/sales/actions");
-        const res = await checkoutAction(item.payload as Parameters<typeof checkoutAction>[0]);
+        const res = await checkoutAction({ ...rawPayload, clientId } as Parameters<typeof checkoutAction>[0]);
         ok = res.ok;
       } else {
         const { recordCustomerTxnAction, attachCustomerTxnImageAction } = await import("@/features/customers/actions");
-        const raw = (item.payload ?? {}) as Record<string, unknown>;
-        const { imageData, imageMime, ...txnPayload } = raw;
-        const res = (await recordCustomerTxnAction(txnPayload)) as
+        const { imageData, imageMime, ...txnPayload } = rawPayload;
+        const res = (await recordCustomerTxnAction({ ...txnPayload, clientId })) as
           | { ok: true; data: { id: string } }
           | { ok: false };
         if (!res.ok) {

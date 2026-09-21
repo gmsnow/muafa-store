@@ -203,10 +203,12 @@ export function PosTerminal({ t, locale, products, customers, canDiscount }: Pro
     if (payMethod !== "CREDIT") {
       payments.push({ method: payMethod, amount: Math.min(paid, totals.total) });
     }
+    const clientId = crypto.randomUUID();
     const payload = {
       items: cart.map((l) => ({ productId: l.id, quantity: l.qty, discount: l.discount || undefined })),
       customerId,
       invoiceDiscount: Number(invoiceDiscount) || 0,
+      clientId,
       payments: totals.creditTotal > 0
         ? [...payments, { method: "CREDIT" as const, amount: totals.creditTotal }]
         : payments,

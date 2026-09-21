@@ -27,6 +27,8 @@ export const customerTxnSchema = z.object({
   type: z.enum(["PAYMENT", "DEBT", "ADJUSTMENT"]),
   amount: moneyField.refine((v) => v > 0, "Amount must be positive"),
   note: z.string().trim().max(300).optional().or(z.literal("")),
+  /** Client-generated idempotency key for offline outbox replay. */
+  clientId: z.string().trim().max(64).optional(),
 });
 
 export type CustomerInput = z.infer<typeof customerSchema>;

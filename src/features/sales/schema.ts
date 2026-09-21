@@ -30,6 +30,8 @@ export const checkoutSchema = z.object({
     .max(5)
     .default([]),
   notes: z.string().trim().max(500).optional().or(z.literal("")),
+  /** Client-generated idempotency key for offline outbox replay. */
+  clientId: z.string().trim().max(64).optional(),
 });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 

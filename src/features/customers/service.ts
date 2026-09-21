@@ -147,6 +147,29 @@ export async function deleteGroup(id: string) {
 export async function recordCustomerTxn(userId: string, raw: unknown) {
   const input = customerTxnSchema.parse(raw);
   const result = await db.$transaction(async (tx) => {
+    // Idempotent replay guard: the offline outbox retries until it gets a
+    // response, so the same clientId may arrive twice. Return the original
+    // row instead of minting a duplicate (and don't touch the balance twice).
+    if (input.clientId) {
+      const existing = await tx.customerTransaction.findUnique({
+        where: { clientId: input.clientId },
+      });
+      if (existing) {
+        const c = await tx.customer.findUnique({
+          where: { id: existing.customerId },
+          select: { name: true, nameAr: true },
+        });
+        return {
+          id: existing.id,
+          balanceAfter: existing.balanceAfter.toString(),
+          customerName: c?.name ?? existing.customerId,
+          customerNameAr: c?.nameAr ?? null,
+          txnType: existing.type,
+          amount: existing.amount.toString(),
+        };
+      }
+    }
+
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, deletedAt: null } });
     if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
     if (customer.balanceFrozen && input.type !== "PAYMENT") {
@@ -183,6 +206,7 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
         balanceAfter: delta.toString(),
         note: input.note || null,
         userId,
+        clientId: input.clientId ?? null,
       },
     });
 

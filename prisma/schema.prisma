@@ -699,6 +699,7 @@ model CustomerTransaction {
   note        String?
   imagePath   String?
   userId      String?
+  clientId    String?              @unique
   createdAt   DateTime               @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -732,6 +733,7 @@ model Sale {
   creditAmount      Decimal    @default(0) @db.Decimal(14, 2)
   refundedAmount    Decimal    @default(0) @db.Decimal(14, 2)
   notes             String?
+  clientId          String?    @unique
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 

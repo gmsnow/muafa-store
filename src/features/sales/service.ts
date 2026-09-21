@@ -89,6 +89,22 @@ export async function createSale(userId: string, raw: unknown) {
   const input: CheckoutInput = checkoutSchema.parse(raw);
 
   return db.$transaction(async (tx) => {
+    // Idempotent replay guard (offline outbox retries): same clientId means
+    // the sale already went through — return it without touching stock/ledger.
+    if (input.clientId) {
+      const existing = await tx.sale.findUnique({ where: { clientId: input.clientId } });
+      if (existing) {
+        return {
+          saleId: existing.id,
+          invoiceNumber: existing.invoiceNumber,
+          total: existing.total.toNumber(),
+          paid: existing.paidTotal.toNumber(),
+          changeDue: existing.changeDue.toNumber(),
+          credit: existing.creditAmount.toNumber(),
+        };
+      }
+    }
+
     // 1 — Server-side price truth: re-fetch every product.
     const ids = [...new Set(input.items.map((i) => i.productId))];
     const products = await tx.product.findMany({
@@ -204,6 +220,7 @@ export async function createSale(userId: string, raw: unknown) {
         changeDue: changeDue.toString(),
         creditAmount: creditAmount.toString(),
         notes: input.notes?.trim() || null,
+        clientId: input.clientId ?? null,
         items: {
           create: lines.map((l) => ({
             productId: l.productId,

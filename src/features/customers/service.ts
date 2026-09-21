@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import Decimal from "decimal.js";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
 import { notify } from "@/features/notifications/service";
@@ -15,7 +16,7 @@ import {
 import {
   customerSchema, customerGroupSchema, customerTxnSchema,
 } from "./schema";
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma, CustomerTransactionType } from "@/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
 // Customers
@@ -147,6 +148,20 @@ export async function deleteGroup(id: string) {
 export async function recordCustomerTxn(userId: string, raw: unknown) {
   const input = customerTxnSchema.parse(raw);
   const result = await db.$transaction(async (tx) => {
+    const resultFor = (existing: {
+      id: string; customerId: string; type: CustomerTransactionType; amount: Decimal; balanceAfter: Decimal;
+    }) => (
+      tx.customer.findUnique({ where: { id: existing.customerId }, select: { name: true, nameAr: true } })
+        .then((c) => ({
+          id: existing.id,
+          balanceAfter: existing.balanceAfter.toString(),
+          customerName: c?.name ?? existing.customerId,
+          customerNameAr: c?.nameAr ?? null,
+          txnType: existing.type,
+          amount: existing.amount.toString(),
+        }))
+    );
+
     // Idempotent replay guard: the offline outbox retries until it gets a
     // response, so the same clientId may arrive twice. Return the original
     // row instead of minting a duplicate (and don't touch the balance twice).
@@ -154,20 +169,23 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
       const existing = await tx.customerTransaction.findUnique({
         where: { clientId: input.clientId },
       });
-      if (existing) {
-        const c = await tx.customer.findUnique({
-          where: { id: existing.customerId },
-          select: { name: true, nameAr: true },
-        });
-        return {
-          id: existing.id,
-          balanceAfter: existing.balanceAfter.toString(),
-          customerName: c?.name ?? existing.customerId,
-          customerNameAr: c?.nameAr ?? null,
-          txnType: existing.type,
-          amount: existing.amount.toString(),
-        };
-      }
+      if (existing) return resultFor(existing);
+    } else {
+      // Defense-in-depth for clients without an idempotency key (legacy web
+      // tabs, the mobile app): an identical record by the same cashier within
+      // the last minute is a retry of a committed request, not a new entry.
+      const recent = await tx.customerTransaction.findFirst({
+        where: {
+          customerId: input.customerId,
+          type: input.type,
+          amount: money(input.amount),
+          note: input.note || null,
+          userId,
+          createdAt: { gte: new Date(Date.now() - 60_000) },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recent) return resultFor(recent);
     }
 
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, deletedAt: null } });

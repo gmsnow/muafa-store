@@ -249,7 +249,7 @@ export async function listCustomerTransactions(opts: {
     db.customerTransaction.findMany({
       where,
       include: { customer: { select: { code: true, name: true, nameAr: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

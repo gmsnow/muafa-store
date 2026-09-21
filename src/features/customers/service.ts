@@ -170,23 +170,25 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
         where: { clientId: input.clientId },
       });
       if (existing) return resultFor(existing);
-    } else {
-      // Defense-in-depth for clients without an idempotency key (legacy web
-      // tabs, the mobile app): an identical record by the same cashier within
-      // the last minute is a retry of a committed request, not a new entry.
-      const recent = await tx.customerTransaction.findFirst({
-        where: {
-          customerId: input.customerId,
-          type: input.type,
-          amount: money(input.amount),
-          note: input.note || null,
-          userId,
-          createdAt: { gte: new Date(Date.now() - 60_000) },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-      if (recent) return resultFor(recent);
     }
+
+    // Defense-in-depth: an identical record by the same cashier within the
+    // last minute is a retry of a committed request, not a new entry. This
+    // runs even when a clientId is present — a retry that mints a fresh key
+    // (double submit, timeout-then-retry, legacy tabs/mobile) would otherwise
+    // bypass the clientId lookup above and double-record.
+    const recent = await tx.customerTransaction.findFirst({
+      where: {
+        customerId: input.customerId,
+        type: input.type,
+        amount: money(input.amount),
+        note: input.note || null,
+        userId,
+        createdAt: { gte: new Date(Date.now() - 60_000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recent) return resultFor(recent);
 
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, deletedAt: null } });
     if (!customer) throw new AppError("NOT_FOUND", "Customer not found");

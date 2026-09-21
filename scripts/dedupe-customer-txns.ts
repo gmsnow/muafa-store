@@ -18,6 +18,10 @@
 //   npx tsx scripts/dedupe-customer-txns.ts --customer CUS-0031 --amount 1600 --since 2026-09-20T23:30:00
 //   npx tsx scripts/dedupe-customer-txns.ts --customer CUS-0031 --amount 1600 --since 2026-09-20T23:30:00 --apply
 import "dotenv/config";
+import { config } from "dotenv";
+// `vercel env pull` writes to .env.local; load it too so the script works with
+// a locally-pulled production environment without copying secrets around.
+config({ path: ".env.local" });
 import { db } from "../src/shared/db";
 import { D } from "../src/shared/core/money";
 import type { CustomerTransaction } from "../src/generated/prisma/client";

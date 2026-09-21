@@ -10,6 +10,7 @@ import {
   type ProductQuery,
 } from "./schema";
 import { Prisma, type MovementType } from "@/generated/prisma/client";
+import { withIdTiebreak } from "@/shared/core/orderby";
 import type { ProductBatch } from "@/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -72,7 +73,7 @@ export async function listProducts(query: ProductQuery) {
     db.product.findMany({
       where,
       select: productCard,
-      orderBy: { createdAt: "desc" },
+      orderBy: withIdTiebreak({ createdAt: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -542,7 +543,7 @@ export async function listStock(query: { q?: string; categoryId?: string; page?:
         category: { select: { name: true, nameAr: true } },
         inventory: { select: { quantity: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: withIdTiebreak({ createdAt: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -693,7 +694,7 @@ export async function listMovements(query: { q?: string; productId?: string; typ
         product: { select: { sku: true, name: true, nameAr: true } },
         user: { select: { username: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: withIdTiebreak({ createdAt: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -714,7 +715,7 @@ export async function listAdjustments(page = 1, pageSize = 25) {
         product: { select: { sku: true, name: true, nameAr: true } },
         user: { select: { username: true, fullName: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: withIdTiebreak({ createdAt: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

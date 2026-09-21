@@ -10,6 +10,7 @@ import {
   type ReceiveInput,
 } from "./schema";
 import type { Prisma, PurchaseOrderStatus } from "@/generated/prisma/client";
+import { withIdTiebreak } from "@/shared/core/orderby";
 
 // ---------------------------------------------------------------------------
 // Numbering (PO- / PUR- / PRE- + 6 digits)
@@ -61,7 +62,7 @@ export async function listSuppliers(opts: { q?: string; includeInactive?: boolea
   const [rows, count] = await Promise.all([
     db.supplier.findMany({
       where,
-      orderBy: { name: "asc" },
+      orderBy: withIdTiebreak({ name: "asc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -185,7 +186,7 @@ export async function listPurchaseOrders(opts: {
     db.purchaseOrder.findMany({
       where,
       include: { supplier: { select: { code: true, name: true, nameAr: true } } },
-      orderBy: { orderDate: "desc" },
+      orderBy: withIdTiebreak({ orderDate: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -595,7 +596,7 @@ export async function listPurchases(opts: {
     db.purchase.findMany({
       where,
       include: { supplier: { select: { code: true, name: true, nameAr: true } } },
-      orderBy: { date: "desc" },
+      orderBy: withIdTiebreak({ date: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -689,7 +690,7 @@ export async function listPurchaseReturns(opts: { q?: string; page?: number; pag
     db.purchaseReturn.findMany({
       where,
       include: { supplier: { select: { code: true, name: true, nameAr: true } } },
-      orderBy: { date: "desc" },
+      orderBy: withIdTiebreak({ date: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

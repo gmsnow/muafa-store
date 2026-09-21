@@ -5,6 +5,7 @@ import { notify } from "@/features/notifications/service";
 import { money } from "@/shared/core/money";
 import { expenseSchema, expenseCategorySchema, type ExpenseInput } from "./schema";
 import { Prisma } from "@/generated/prisma/client";
+import { withIdTiebreak } from "@/shared/core/orderby";
 
 export async function listExpenses(opts: {
   categoryId?: string; page?: number; pageSize?: number;
@@ -30,7 +31,7 @@ export async function listExpenses(opts: {
         category: { select: { name: true, nameAr: true } },
         user: { select: { fullName: true, fullNameAr: true } },
       },
-      orderBy: { expenseDate: "desc" },
+      orderBy: withIdTiebreak({ expenseDate: "desc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

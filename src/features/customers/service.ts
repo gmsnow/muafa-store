@@ -4,6 +4,7 @@ import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
 import { notify } from "@/features/notifications/service";
 import { D, money } from "@/shared/core/money";
+import { withIdTiebreak } from "@/shared/core/orderby";
 import { TXN_IMAGE_BUCKET, uploadObject, removeObjects, downloadObject } from "@/shared/supabase-storage";
 import {
   decodeImageData as decodeTxnImage,
@@ -46,7 +47,7 @@ export async function listCustomers(opts: {
     db.customer.findMany({
       where,
       include: { group: { select: { id: true, name: true, discountRate: true } } },
-      orderBy: { name: "asc" },
+      orderBy: withIdTiebreak({ name: "asc" }),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -249,7 +250,7 @@ export async function listCustomerTransactions(opts: {
     db.customerTransaction.findMany({
       where,
       include: { customer: { select: { code: true, name: true, nameAr: true } } },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: withIdTiebreak([{ createdAt: "desc" }, { id: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -276,7 +277,7 @@ export async function listLatestCustomerTransactions(opts: {
       by: ["customerId"],
       where,
       _max: { createdAt: true },
-      orderBy: { _max: { createdAt: "desc" } },
+      orderBy: [{ _max: { createdAt: "desc" } }, { customerId: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

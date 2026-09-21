@@ -9,6 +9,7 @@ import {
   type CheckoutInput, type SalesQuery,
 } from "./schema";
 import type { Prisma, PaymentMethod, SaleStatus } from "@/generated/prisma/client";
+import { withIdTiebreak } from "@/shared/core/orderby";
 
 // ---------------------------------------------------------------------------
 // POS product search (fast: indexed columns, tight limit)
@@ -656,7 +657,7 @@ export async function listSales(query: SalesQuery) {
   const [rows, total] = await Promise.all([
     db.sale.findMany({
       where, select: salesCard,
-      orderBy: { saleDate: "desc" },
+      orderBy: withIdTiebreak({ saleDate: "desc" }),
       skip: (page - 1) * pageSize, take: pageSize,
     }),
     db.sale.count({ where }),

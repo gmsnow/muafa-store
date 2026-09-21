@@ -8,7 +8,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db";
-import { saveCustomer, recordCustomerTxn } from "../src/features/customers/service";
+import { saveCustomer, recordCustomerTxn, findCustomerTxnDuplicate } from "../src/features/customers/service";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -48,6 +48,14 @@ async function main() {
       where: { customerId, amount: 200, note: "smoke-burst" },
     });
     check("fresh-key identical ×3 within 60s → one ledger row", countB === 1, `count=${countB}`);
+
+    // D — legacy outbox replay (queued BEFORE idempotency keys, so NO clientId)
+    // fires days later. The replay path now asks "does an identical row exist?"
+    // instead of indeling a fresh one — over any horizon, not just 60s.
+    const legacyMatch = await findCustomerTxnDuplicate(user.id, {
+      customerId, type: "DEBT", amount: 200, note: "smoke-burst",
+    });
+    check("legacy replay of a committed row is recognized", !!legacyMatch, `match=${legacyMatch?.id ?? "none"}`);
 
     // Distinct entry must still be created (guard must not over-block).
     await recordCustomerTxn(user.id, { customerId, type: "DEBT", amount: 55, note: "smoke-distinct" });

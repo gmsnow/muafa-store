@@ -16,6 +16,7 @@ import {
 import {
   customerSchema, customerGroupSchema, customerTxnSchema,
 } from "./schema";
+import type { CustomerTxnInput } from "./schema";
 import type { Prisma, CustomerTransactionType } from "@/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -248,6 +249,29 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
     entityType: "Customer", entityId: input.customerId, href: "/customers/transactions",
   });
   return { id: result.id, balanceAfter: result.balanceAfter };
+}
+
+/**
+ * Match an identical ledger entry for the same cashier, over any horizon.
+ * Replay paths (offline outbox, mobile API) that lack an idempotency key use
+ * this to recognize an already-committed submission and drop the retry instead
+ * of minting a second row. Returns the newest matching row's id + balanceAfter.
+ */
+export async function findCustomerTxnDuplicate(
+  userId: string,
+  raw: Pick<CustomerTxnInput, "customerId" | "type" | "amount" | "note">,
+) {
+  return db.customerTransaction.findFirst({
+    where: {
+      customerId: raw.customerId,
+      type: raw.type,
+      amount: money(raw.amount),
+      note: raw.note?.trim() || null,
+      userId,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, balanceAfter: true },
+  });
 }
 
 function txnSearchWhere(q?: string): Prisma.CustomerTransactionWhereInput | undefined {

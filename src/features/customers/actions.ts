@@ -2,10 +2,11 @@
 
 import { guard, ok } from "@/shared/core/api-response";
 import { requirePermission } from "@/features/auth/session";
+import { customerTxnSchema } from "./schema";
 import {
   saveCustomer, softDeleteCustomer, getCustomerForEdit,
   listGroups, saveGroup, deleteGroup,
-  recordCustomerTxn, listCustomerTransactions, getStatement,
+  recordCustomerTxn, findCustomerTxnDuplicate, listCustomerTransactions, getStatement,
   deleteCustomerTxnsByMonth,
   updateCustomerTxn, deleteCustomerTxn,
   attachCustomerTxnImage, deleteCustomerTxnImage,
@@ -75,6 +76,15 @@ export async function recordCustomerTxnAction(raw: unknown) {
   return guard(async () => {
     const user = await requirePermission("customers.credit");
     return ok(await recordCustomerTxn(user.id, raw));
+  });
+}
+
+/** Replay-path duplicate lookup: returns the latest identical row (or none). */
+export async function matchCustomerTxnAction(raw: unknown) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    const input = customerTxnSchema.parse(raw);
+    return ok(await findCustomerTxnDuplicate(user.id, input));
   });
 }
 

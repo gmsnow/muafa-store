@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getMobileUser } from "@/features/mobile/auth";
 import { mobileGuard } from "@/features/mobile/guard";
 import { AppError } from "@/shared/core/api-response";
-import { listCustomerTransactions, recordCustomerTxn } from "@/features/customers/service";
+import { listCustomerTransactions, recordCustomerTxn, findCustomerTxnDuplicate } from "@/features/customers/service";
 
 export async function GET(request: NextRequest) {
   return mobileGuard(async () => {
@@ -30,6 +30,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    // A submission without an idempotency key is treated as a retry: if an
+    // identical row already exists for this cashier, return it instead of
+    // minting a duplicate.
+    if (
+      !body?.clientId &&
+      body?.customerId &&
+      body?.type &&
+      typeof body?.amount !== "undefined"
+    ) {
+      const dup = await findCustomerTxnDuplicate(user.id, body);
+      if (dup) return { id: dup.id, balanceAfter: dup.balanceAfter.toString() };
+    }
     return recordCustomerTxn(user.id, body);
   });
 }

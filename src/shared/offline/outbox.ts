@@ -160,8 +160,24 @@ export async function flushOutbox(): Promise<FlushResult> {
         const res = await checkoutAction({ ...rawPayload, clientId } as Parameters<typeof checkoutAction>[0]);
         ok = res.ok;
       } else {
-        const { recordCustomerTxnAction, attachCustomerTxnImageAction } = await import("@/features/customers/actions");
+        const { recordCustomerTxnAction, attachCustomerTxnImageAction, matchCustomerTxnAction } =
+          await import("@/features/customers/actions");
         const { imageData, imageMime, ...txnPayload } = rawPayload;
+        // Legacy queued items predate idempotency keys. Replaying them with a
+        // fresh key would mint a brand-new row even though the original was
+        // already committed — that's how old "auto-added" duplicates resurfaced.
+        // If an identical ledger entry already exists, this is a duplicate:
+        // drop it without calling the server again.
+        if (!rawPayload.clientId) {
+          const match = (await matchCustomerTxnAction(txnPayload)) as
+            | { ok: true; data: { id: string } | null }
+            | { ok: false };
+          if (match.ok && match.data?.id) {
+            await removeOutbox(item.id);
+            synced += 1;
+            continue;
+          }
+        }
         const res = (await recordCustomerTxnAction({ ...txnPayload, clientId })) as
           | { ok: true; data: { id: string } }
           | { ok: false };

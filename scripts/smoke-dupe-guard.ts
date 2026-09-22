@@ -8,7 +8,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db";
-import { saveCustomer, recordCustomerTxn, findCustomerTxnDuplicate } from "../src/features/customers/service";
+import { saveCustomer, recordCustomerTxn, findCustomerTxnDuplicate, clearCustomerAccount } from "../src/features/customers/service";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -63,6 +63,13 @@ async function main() {
       where: { customerId, amount: 55, note: "smoke-distinct" },
     });
     check("distinct entry still records", countC === 1, `count=${countC}`);
+
+    // E — تصفية الحساب: clear account deletes ALL txns and zeroes the balance.
+    const clear = await clearCustomerAccount(user.id, customerId);
+    const afterClear = await db.customerTransaction.count({ where: { customerId } });
+    const clearedCust = await db.customer.findUnique({ where: { id: customerId }, select: { balance: true } });
+    check("clear account deletes every txn", clear.deleted === 3 && afterClear === 0, `deleted=${clear.deleted} left=${afterClear}`);
+    check("clear account zeroes balance", clearedCust?.balance.toString() === "0", `balance=${clearedCust?.balance}`);
   } finally {
     // Leave no trace in the target DB.
     await db.customerTransaction.deleteMany({ where: { customerId } });

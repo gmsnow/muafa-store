@@ -12,6 +12,7 @@ import { DeleteButton } from "@/features/inventory/ui/delete-button";
 import { StatementPeriodLink } from "./statement-period-link";
 import { CustomerLauncher } from "./customer-launcher";
 import { FreezeButton } from "./freeze-button";
+import { ClearAccountButton } from "../transactions/clear-account-button";
 
 export default async function CustomersPage({
   searchParams,
@@ -118,6 +119,13 @@ export default async function CustomersPage({
                             {t.common.delete}
                           </Button>
                         }
+                      />
+                      <ClearAccountButton
+                        customerId={c.id}
+                        labels={{
+                          title: t.customers.clearAccount, confirm: t.customers.clearAccountConfirm,
+                          success: t.customers.accountCleared, cancel: t.common.cancel,
+                        }}
                       />
                     </div>
                   </TableCell>

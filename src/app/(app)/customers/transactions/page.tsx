@@ -17,6 +17,7 @@ import { deleteCustomerTxnsMonthAction } from "@/features/customers/actions";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { Button } from "@/components/ui/button";
 import { DeleteMonthButton } from "./delete-month-button";
+import { ClearAccountButton } from "./clear-account-button";
 import { TxnRowActions } from "./txn-row-actions";
 import { CustomerLauncher } from "../list/customer-launcher";
 import { TxnImage } from "@/features/customers/ui/image-view";
@@ -78,6 +79,15 @@ export default async function CustomerTransactionsPage({
               labels={{
                 title: t.customers.deleteMonth, confirm: t.customers.deleteMonthConfirm,
                 success: t.customers.monthDeleted, cancel: t.common.cancel,
+              }}
+            />
+          )}
+          {customerId && (
+            <ClearAccountButton
+              customerId={customerId}
+              labels={{
+                title: t.customers.clearAccount, confirm: t.customers.clearAccountConfirm,
+                success: t.customers.accountCleared, cancel: t.common.cancel,
               }}
             />
           )}

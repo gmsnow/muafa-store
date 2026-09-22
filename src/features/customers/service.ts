@@ -488,6 +488,45 @@ export async function deleteCustomerTxn(userId: string, id: string) {
   });
 }
 
+/**
+ * Settle a customer's account (تصفية الحساب): delete every transaction and
+ * reset the balance to zero. Orphaned note-image objects are removed from
+ * storage best-effort after the ledger commit so nothing leaks.
+ */
+export async function clearCustomerAccount(userId: string, customerId: string) {
+  const customer = await db.customer.findFirst({
+    where: { id: customerId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!customer) throw new AppError("NOT_FOUND", "Customer not found");
+
+  const result = await db.$transaction(async (tx) => {
+    const rows = await tx.customerTransaction.findMany({
+      where: { customerId },
+      select: { imagePath: true },
+    });
+    const { count } = await tx.customerTransaction.deleteMany({ where: { customerId } });
+    await tx.customer.update({ where: { id: customerId }, data: { balance: "0" } });
+    await import("@/shared/core/audit").then(({ recordAudit }) =>
+      recordAudit(tx, {
+        userId, action: "CUSTOMER_ACCOUNT_CLEAR", entityType: "Customer",
+        entityId: customerId,
+        newValues: { deleted: count },
+      }),
+    );
+    return { deleted: count, images: rows.map((r) => r.imagePath).filter((p): p is string => !!p) };
+  });
+
+  if (result.images.length > 0) {
+    try {
+      await removeObjects(TXN_IMAGE_BUCKET, result.images);
+    } catch {
+      // Best effort — a stale object is harmless and swept by the dedupe tool.
+    }
+  }
+  return { deleted: result.deleted };
+}
+
 // ---------------------------------------------------------------------------
 // Transaction note images
 // Files live in private Supabase Storage (path: {userId}/{txnId}/{uuid}.ext);

@@ -9,6 +9,7 @@ import {
   recordCustomerTxn, findCustomerTxnDuplicate, listCustomerTransactions, getStatement,
   deleteCustomerTxnsByMonth,
   updateCustomerTxn, deleteCustomerTxn,
+  clearCustomerAccount,
   attachCustomerTxnImage, deleteCustomerTxnImage,
   setCustomerBalanceFrozen,
 } from "./service";
@@ -106,6 +107,14 @@ export async function deleteCustomerTxnAction(id: string) {
   return guard(async () => {
     const user = await requirePermission("customers.credit");
     return ok(await deleteCustomerTxn(user.id, id));
+  });
+}
+
+/** تصفية الحساب — delete all transactions of a customer and zero the balance. */
+export async function clearCustomerAccountAction(customerId: string) {
+  return guard(async () => {
+    const user = await requirePermission("customers.credit");
+    return ok(await clearCustomerAccount(user.id, customerId));
   });
 }
 

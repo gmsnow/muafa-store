@@ -9,6 +9,7 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db";
 import { saveCustomer, recordCustomerTxn, findCustomerTxnDuplicate, clearCustomerAccount, deleteCustomerTxn } from "../src/features/customers/service";
+import { purgeDuplicateTxns } from "../src/features/customers/dedupe";
 import { AppError } from "../src/shared/core/api-response";
 
 const usedClientIds: string[] = [];
@@ -111,11 +112,33 @@ async function main() {
     const countF = await db.customerTransaction.count({ where: { customerId, amount: 77 } });
     check("deleted txn is not resurrected", countF === 0, `count=${countF}`);
 
+    // G — daily guard cron: purgeDuplicateTxns scans ALL customers and deletes
+    // retry-duplicates (the same work /api/cron/duplicate-guard runs nightly).
+    // Seeded with raw rows that bypass the app guards to emulate dupes.
+    const cronKeys = [0, 1, 2].map(() => `cron-${randomUUID()}`);
+    usedClientIds.push(...cronKeys);
+    await db.customerTransaction.createMany({
+      data: cronKeys.map((key, i) => ({
+        customerId, type: "DEBT" as const, amount: 88, note: "smoke-cron", userId: user.id,
+        balanceAfter: (88 * (i + 1)).toFixed(2), clientId: key,
+        createdAt: new Date(Date.now() - (2 - i) * 5 * 60 * 1000),
+      })),
+    });
+    const cronResult = await purgeDuplicateTxns();
+    const cronLeft = await db.customerTransaction.count({ where: { customerId, amount: 88, note: "smoke-cron" } });
+    const cronCust = await db.customer.findUnique({ where: { id: customerId }, select: { balance: true } });
+    const cronSealed = await db.deletedKey.count({ where: { clientId: { in: cronKeys } } });
+    check("daily guard purges retry-duplicates", cronResult.purged === 2, `purged=${cronResult.purged}`);
+    check("only the earliest row survives purge", cronLeft === 1, `left=${cronLeft}`);
+    // Rebuilt ledger = every remaining row for this customer (A 100 + B 200 + C 55 + G 88).
+    check("ledger rebuilt after purge", cronCust?.balance.toString() === "443", `balance=${cronCust?.balance}`);
+    check("purged keys are sealed", cronSealed === 2, `sealed=${cronSealed}`);
+
     // E — تصفية الحساب: clear account deletes ALL txns and zeroes the balance.
     const clear = await clearCustomerAccount(user.id, customerId);
     const afterClear = await db.customerTransaction.count({ where: { customerId } });
     const clearedCust = await db.customer.findUnique({ where: { id: customerId }, select: { balance: true } });
-    check("clear account deletes every txn", clear.deleted === 3 && afterClear === 0, `deleted=${clear.deleted} left=${afterClear}`);
+    check("clear account deletes every txn", clear.deleted === 4 && afterClear === 0, `deleted=${clear.deleted} left=${afterClear}`);
     check("clear account zeroes balance", clearedCust?.balance.toString() === "0", `balance=${clearedCust?.balance}`);
   } finally {
     // Leave no trace in the target DB.

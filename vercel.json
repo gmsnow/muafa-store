@@ -1,3 +1,9 @@
 {
-  "buildCommand": "DATABASE_URL=$MIGRATE_DATABASE_URL prisma migrate deploy && npm run build"
+  "buildCommand": "DATABASE_URL=$MIGRATE_DATABASE_URL prisma migrate deploy && npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/duplicate-guard",
+      "schedule": "0 2 * * *"
+    }
+  ]
 }

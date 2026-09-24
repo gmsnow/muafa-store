@@ -49,6 +49,18 @@ async function main() {
     });
     check("fresh-key identical ×3 within 60s → one ledger row", countB === 1, `count=${countB}`);
 
+    // CUS-0004 regression — an identical retry that lands MORE than a minute
+    // later with a fresh key (the 1950 burst was 5.5/6 min apart) must still
+    // resolve to the original row, thanks to the 6h horizon.
+    await new Promise((r) => setTimeout(r, 75_000));
+    await recordCustomerTxn(user.id, {
+      customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: `late-${randomUUID()}`,
+    });
+    const countLate = await db.customerTransaction.count({
+      where: { customerId, amount: 200, note: "smoke-burst" },
+    });
+    check("fresh-key retry >60s later still one row", countLate === 1, `count=${countLate}`);
+
     // D — legacy outbox replay (queued BEFORE idempotency keys, so NO clientId)
     // fires days later. The replay path now asks "does an identical row exist?"
     // instead of indeling a fresh one — over any horizon, not just 60s.

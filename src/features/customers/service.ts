@@ -174,10 +174,15 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
     }
 
     // Defense-in-depth: an identical record by the same cashier within the
-    // last minute is a retry of a committed request, not a new entry. This
+    // dedupe horizon is a retry of a committed request, not a new entry. This
     // runs even when a clientId is present — a retry that mints a fresh key
-    // (double submit, timeout-then-retry, legacy tabs/mobile) would otherwise
-    // bypass the clientId lookup above and double-record.
+    // (double submit, timeout-then-retry, legacy tabs/mobile resync) would
+    // otherwise bypass the clientId lookup above and double-record.
+    //
+    // Horizon is 6h: real retry storms arrive minutes apart (the observed
+    // CUS-0004 burst was 1950×3 spaced 5.5/6 minutes apart), while legitimate
+    // repeat entries for the same customer are ~24h apart or differ in amount
+    // or note — so this never swallows genuine daily orders.
     const recent = await tx.customerTransaction.findFirst({
       where: {
         customerId: input.customerId,
@@ -185,7 +190,7 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
         amount: money(input.amount),
         note: input.note || null,
         userId,
-        createdAt: { gte: new Date(Date.now() - 60_000) },
+        createdAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
       },
       orderBy: { createdAt: "desc" },
     });

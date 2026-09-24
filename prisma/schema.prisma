@@ -711,6 +711,20 @@ model CustomerTransaction {
   @@map("customer_transactions")
 }
 
+// Tombstone for idempotency keys whose ledger row was deliberately removed
+// (duplicate purge, manual delete, clear account). An offline retry replaying
+// a tombstoned key must NOT resurrect the deleted row — the same key is the
+// only reliable signal that the replay and the removed row were the SAME
+// operation (an identical customer/amount/note repeat can still be a genuine
+// new debt ~24h later).
+model DeletedKey {
+  clientId  String   @id
+  createdAt DateTime @default(now())
+  reason    String?
+
+  @@map("deleted_keys")
+}
+
 // ============================================================================
 // SALES
 // ============================================================================

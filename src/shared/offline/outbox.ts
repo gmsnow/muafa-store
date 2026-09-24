@@ -180,7 +180,16 @@ export async function flushOutbox(): Promise<FlushResult> {
         }
         const res = (await recordCustomerTxnAction({ ...txnPayload, clientId })) as
           | { ok: true; data: { id: string } }
-          | { ok: false };
+          | { ok: false; error?: { code?: string } };
+        if (!res.ok && res.error?.code === "DELETED_KEY") {
+          // The row this item created was deliberately deleted (duplicate
+          // purge / manual delete / clear account). Its key is tombstoned, so
+          // replaying it forever would only resurrect a row the user removed —
+          // drop the item instead of retrying it.
+          await removeOutbox(item.id);
+          synced += 1;
+          continue;
+        }
         if (!res.ok) {
           ok = false; // payment failed — stays queued for retry
         } else if (imageData) {

@@ -8,7 +8,10 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db";
-import { saveCustomer, recordCustomerTxn, findCustomerTxnDuplicate, clearCustomerAccount } from "../src/features/customers/service";
+import { saveCustomer, recordCustomerTxn, findCustomerTxnDuplicate, clearCustomerAccount, deleteCustomerTxn } from "../src/features/customers/service";
+import { AppError } from "../src/shared/core/api-response";
+
+const usedClientIds: string[] = [];
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -28,7 +31,9 @@ async function main() {
 
   try {
     // A — same clientId replayed (offline outbox retry storm).
-    const payloadA = { customerId, type: "DEBT" as const, amount: 100, note: "smoke-same-key", clientId: `smoke-${randomUUID()}` };
+    const keyA = `smoke-${randomUUID()}`;
+    usedClientIds.push(keyA);
+    const payloadA = { customerId, type: "DEBT" as const, amount: 100, note: "smoke-same-key", clientId: keyA };
     const r1 = await recordCustomerTxn(user.id, payloadA);
     const r2 = await recordCustomerTxn(user.id, payloadA);
     const r3 = await recordCustomerTxn(user.id, payloadA);
@@ -40,8 +45,10 @@ async function main() {
 
     // B — identical submissions with fresh keys within 60s (double-tap storm).
     for (let i = 0; i < 3; i++) {
+      const k = `fresh-${randomUUID()}`;
+      usedClientIds.push(k);
       await recordCustomerTxn(user.id, {
-        customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: `fresh-${randomUUID()}`,
+        customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: k,
       });
     }
     const countB = await db.customerTransaction.count({
@@ -53,8 +60,10 @@ async function main() {
     // later with a fresh key (the 1950 burst was 5.5/6 min apart) must still
     // resolve to the original row, thanks to the 6h horizon.
     await new Promise((r) => setTimeout(r, 75_000));
+    const lateKey = `late-${randomUUID()}`;
+    usedClientIds.push(lateKey);
     await recordCustomerTxn(user.id, {
-      customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: `late-${randomUUID()}`,
+      customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: lateKey,
     });
     const countLate = await db.customerTransaction.count({
       where: { customerId, amount: 200, note: "smoke-burst" },
@@ -76,6 +85,32 @@ async function main() {
     });
     check("distinct entry still records", countC === 1, `count=${countC}`);
 
+    // F — resurrection guard (the CUS-0004 21:01 bug): a row whose clientId
+    // was deliberately deleted (manual delete / dedupe purge / clear account)
+    // is tombstoned. A stale offline replay carrying the SAME key later must
+    // NOT create a fresh copy of the removed row.
+    const tombKey = `tomb-${randomUUID()}`;
+    usedClientIds.push(tombKey);
+    const fr = await recordCustomerTxn(user.id, {
+      customerId, type: "DEBT", amount: 77, note: "smoke-tombstone", clientId: tombKey,
+    });
+    const countF0 = await db.customerTransaction.count({ where: { customerId, amount: 77 } });
+    check("resurrection checkpoint: row exists first", countF0 === 1, `count=${countF0}`);
+    await deleteCustomerTxn(user.id, fr.id);
+    const sealed = await db.deletedKey.findUnique({ where: { clientId: tombKey } });
+    check("delete seals the idempotency key", !!sealed, `sealed=${sealed?.reason ?? "none"}`);
+    let threw = "";
+    try {
+      await recordCustomerTxn(user.id, {
+        customerId, type: "DEBT", amount: 77, note: "smoke-tombstone", clientId: tombKey,
+      });
+    } catch (e) {
+      threw = e instanceof AppError ? e.code : String((e as Error)?.message);
+    }
+    check("replaying a deleted key is rejected", threw === "DELETED_KEY", `threw=${threw}`);
+    const countF = await db.customerTransaction.count({ where: { customerId, amount: 77 } });
+    check("deleted txn is not resurrected", countF === 0, `count=${countF}`);
+
     // E — تصفية الحساب: clear account deletes ALL txns and zeroes the balance.
     const clear = await clearCustomerAccount(user.id, customerId);
     const afterClear = await db.customerTransaction.count({ where: { customerId } });
@@ -85,6 +120,7 @@ async function main() {
   } finally {
     // Leave no trace in the target DB.
     await db.customerTransaction.deleteMany({ where: { customerId } });
+    await db.deletedKey.deleteMany({ where: { clientId: { in: usedClientIds } } });
     await db.customer.deleteMany({ where: { id: customerId } });
   }
 

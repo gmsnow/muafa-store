@@ -163,6 +163,17 @@ export async function recordCustomerTxn(userId: string, raw: unknown) {
         }))
     );
 
+    // Resurrection guard: a clientId whose row was deliberately deleted
+    // (duplicate purge, manual delete, clear account) is tombstoned. An
+    // offline outbox replay or mobile resubmit carrying that same key is the
+    // SAME operation as the removed row — drop it instead of minting a fresh
+    // copy (the identical customer/amount/note repeat can also be a genuine
+    // new debt ~24h later, so only the key is trusted here, not content).
+    if (input.clientId) {
+      const sealed = await tx.deletedKey.findUnique({ where: { clientId: input.clientId } });
+      if (sealed) throw new AppError("DELETED_KEY", "This entry was already deleted / تم حذف هذا السجل");
+    }
+
     // Idempotent replay guard: the offline outbox retries until it gets a
     // response, so the same clientId may arrive twice. Return the original
     // row instead of minting a duplicate (and don't touch the balance twice).
@@ -374,6 +385,26 @@ export async function listLatestCustomerTransactions(opts: {
 }
 
 /**
+ * Seal the idempotency keys of rows being removed so a stale offline replay
+ * carrying one of those keys is recognized as the deleted operation and never
+ * resurrected (see the DELETED_KEY guard in recordCustomerTxn).
+ */
+async function tombstoneDeletedKeys(
+  tx: Prisma.TransactionClient,
+  rows: { clientId: string | null }[],
+  reason: string,
+) {
+  const keys = [...new Set(rows.map((r) => r.clientId).filter((k): k is string => !!k))];
+  for (const key of keys) {
+    await tx.deletedKey.upsert({
+      where: { clientId: key },
+      create: { clientId: key, reason },
+      update: {},
+    });
+  }
+}
+
+/**
  * Delete every transaction inside a calendar month (optionally one customer),
  * then recompute each affected customer's balance from their remaining rows:
  * DEBT and ADJUSTMENT add, PAYMENT subtracts, REFUND amounts are stored
@@ -390,11 +421,13 @@ export async function deleteCustomerTxnsByMonth(
       createdAt: range,
       ...(input.customerId ? { customerId: input.customerId } : {}),
     };
-    const affected = await tx.customerTransaction.findMany({
-      where, select: { customerId: true }, distinct: ["customerId"],
+    const doomed = await tx.customerTransaction.findMany({
+      where, select: { customerId: true, clientId: true },
     });
+    const affected = [...new Set(doomed.map((d) => d.customerId))];
     const deleted = await tx.customerTransaction.deleteMany({ where });
-    for (const { customerId } of affected) {
+    await tombstoneDeletedKeys(tx, doomed, "month-delete");
+    for (const customerId of affected) {
       const sums = await tx.customerTransaction.groupBy({
         by: ["type"], where: { customerId }, _sum: { amount: true },
       });
@@ -481,6 +514,7 @@ export async function deleteCustomerTxn(userId: string, id: string) {
     const existing = await tx.customerTransaction.findUnique({ where: { id } });
     if (!existing) throw new AppError("NOT_FOUND", "Transaction not found");
     await tx.customerTransaction.delete({ where: { id } });
+    await tombstoneDeletedKeys(tx, [existing], "manual-delete");
     const balance = await recomputeCustomerLedger(tx, existing.customerId);
 
     await import("@/shared/core/audit").then(({ recordAudit }) =>
@@ -508,9 +542,10 @@ export async function clearCustomerAccount(userId: string, customerId: string) {
   const result = await db.$transaction(async (tx) => {
     const rows = await tx.customerTransaction.findMany({
       where: { customerId },
-      select: { imagePath: true },
+      select: { imagePath: true, clientId: true },
     });
     const { count } = await tx.customerTransaction.deleteMany({ where: { customerId } });
+    await tombstoneDeletedKeys(tx, rows, "account-clear");
     await tx.customer.update({ where: { id: customerId }, data: { balance: "0" } });
     await import("@/shared/core/audit").then(({ recordAudit }) =>
       recordAudit(tx, {

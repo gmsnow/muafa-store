@@ -42,6 +42,15 @@ export async function POST(request: NextRequest) {
       const dup = await findCustomerTxnDuplicate(user.id, body);
       if (dup) return { id: dup.id, balanceAfter: dup.balanceAfter.toString() };
     }
-    return recordCustomerTxn(user.id, body);
+    try {
+      return recordCustomerTxn(user.id, body);
+    } catch (e) {
+      if (e instanceof AppError && e.code === "DELETED_KEY") {
+        // The row this submission originally created was deliberately deleted;
+        // the mobile client should treat the action as done, not as an error.
+        return { suppressed: true, balanceAfter: "0" };
+      }
+      throw e;
+    }
   });
 }

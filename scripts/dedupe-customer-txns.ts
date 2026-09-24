@@ -121,6 +121,16 @@ async function main() {
   await db.$transaction(async (tx) => {
     for (const t of toDelete) {
       await tx.customerTransaction.delete({ where: { id: t.id } });
+      // Seal the purged row's idempotency key so a stale offline replay with
+      // that key can't resurrect it later (goes through recordCustomerTxn's
+      // DELETED_KEY guard).
+      if (t.clientId) {
+        await tx.deletedKey.upsert({
+          where: { clientId: t.clientId },
+          create: { clientId: t.clientId, reason: "dedupe-purge" },
+          update: {},
+        });
+      }
     }
     for (const cid of affected) {
       const rows = await tx.customerTransaction.findMany({

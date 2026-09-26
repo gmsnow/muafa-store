@@ -24,6 +24,8 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { db } from "../src/shared/db";
 import { D } from "../src/shared/core/money";
+import { assertValidClientId } from "../src/shared/core/clientid";
+import { ledgerDelta } from "../src/features/customers/ledger";
 import type { CustomerTransaction } from "../src/generated/prisma/client";
 
 function argValue(name: string): string | undefined {
@@ -125,6 +127,7 @@ async function main() {
       // that key can't resurrect it later (goes through recordCustomerTxn's
       // DELETED_KEY guard).
       if (t.clientId) {
+        assertValidClientId(t.clientId);
         await tx.deletedKey.upsert({
           where: { clientId: t.clientId },
           create: { clientId: t.clientId, reason: "dedupe-purge" },
@@ -140,8 +143,7 @@ async function main() {
       });
       let bal = D(0);
       for (const r of rows) {
-        const amt = D(r.amount);
-        bal = bal.plus(r.type === "PAYMENT" ? amt.negated() : amt);
+        bal = bal.plus(ledgerDelta(r.type, r.amount));
         if (!bal.eq(D(r.balanceAfter))) {
           await tx.customerTransaction.update({
             where: { id: r.id },

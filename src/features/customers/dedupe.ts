@@ -1,6 +1,7 @@
 import { db } from "@/shared/db";
 import { D } from "@/shared/core/money";
-import type { CustomerTransaction } from "@/generated/prisma/client";
+import { assertValidClientId } from "@/shared/core/clientid";
+import { ledgerDelta } from "./ledger";
 
 /**
  * Scan every customer transaction for retry-duplicates (identical customer /
@@ -9,6 +10,12 @@ import type { CustomerTransaction } from "@/generated/prisma/client";
  * rows' idempotency keys are tombstoned so a stale offline replay can never
  * resurrect them, and every affected ledger (balanceAfter chain + customer
  * balance) is rebuilt exactly.
+ *
+ * A second sweep removes resurrection rows: any live transaction whose
+ * idempotency key is already tombstoned (a write-time guard was bypassed —
+ * exactly what happened live for CUS-0004's second 1950) is purged
+ * regardless of the window — the key itself proves it is a copy of a
+ * deliberately removed operation.
  */
 export interface DuplicateGuardResult {
   scanned: number;
@@ -21,37 +28,52 @@ export async function purgeDuplicateTxns(
 ): Promise<DuplicateGuardResult> {
   const txns = await db.customerTransaction.findMany({
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true, customerId: true, type: true, amount: true, note: true, userId: true, clientId: true, createdAt: true,
+    },
   });
 
-  const clusters = new Map<string, CustomerTransaction[]>();
+  const clusters = new Map<string, (typeof txns)[number][]>();
   for (const t of txns) {
     const key = [t.customerId, t.type, String(t.amount), t.note ?? "", t.userId ?? ""].join("|");
-    const list = clusters.get(key) ?? [];
+    const list = clusters.get(key) ?? ([] as (typeof txns)[number][]);
     list.push(t);
     clusters.set(key, list);
   }
 
-  const toDelete: CustomerTransaction[] = [];
-  const affected = new Set<string>();
+  const doomed = new Map<string, string>(); // txn id -> customerId
   for (const list of clusters.values()) {
     for (let i = 1; i < list.length; i++) {
       const prev = list[i - 1];
       const cur = list[i];
       if (cur.createdAt.getTime() - prev.createdAt.getTime() <= windowMs) {
-        toDelete.push(cur);
-        affected.add(cur.customerId);
+        doomed.set(cur.id, cur.customerId);
       }
     }
   }
 
-  if (toDelete.length === 0) {
+  // Resurrection sweep: any live row whose key is tombstoned.
+  const seals = await db.deletedKey.findMany({ select: { clientId: true } });
+  if (seals.length > 0) {
+    const resurrections = await db.customerTransaction.findMany({
+      where: { clientId: { in: seals.map((s) => s.clientId) } },
+      select: { id: true, customerId: true },
+    });
+    for (const r of resurrections) doomed.set(r.id, r.customerId);
+  }
+
+  if (doomed.size === 0) {
     return { scanned: txns.length, purged: 0, affectedCustomers: [] };
   }
+
+  const toDelete = txns.filter((t) => doomed.has(t.id));
+  const affected = [...new Set(doomed.values())];
 
   await db.$transaction(async (tx) => {
     for (const t of toDelete) {
       await tx.customerTransaction.delete({ where: { id: t.id } });
       if (t.clientId) {
+        assertValidClientId(t.clientId);
         await tx.deletedKey.upsert({
           where: { clientId: t.clientId },
           create: { clientId: t.clientId, reason: "cron-dupe-purge" },
@@ -69,8 +91,7 @@ export async function purgeDuplicateTxns(
       });
       let balance = D(0);
       for (const r of rows) {
-        const amt = D(r.amount);
-        balance = balance.plus(r.type === "PAYMENT" ? amt.negated() : amt);
+        balance = balance.plus(ledgerDelta(r.type, r.amount));
         if (!balance.eq(D(r.balanceAfter))) {
           await tx.customerTransaction.update({
             where: { id: r.id },
@@ -82,5 +103,5 @@ export async function purgeDuplicateTxns(
     }
   });
 
-  return { scanned: txns.length, purged: toDelete.length, affectedCustomers: [...affected] };
+  return { scanned: txns.length, purged: toDelete.length, affectedCustomers: affected };
 }

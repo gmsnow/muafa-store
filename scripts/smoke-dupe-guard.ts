@@ -32,7 +32,7 @@ async function main() {
 
   try {
     // A — same clientId replayed (offline outbox retry storm).
-    const keyA = `smoke-${randomUUID()}`;
+    const keyA = randomUUID();
     usedClientIds.push(keyA);
     const payloadA = { customerId, type: "DEBT" as const, amount: 100, note: "smoke-same-key", clientId: keyA };
     const r1 = await recordCustomerTxn(user.id, payloadA);
@@ -46,7 +46,7 @@ async function main() {
 
     // B — identical submissions with fresh keys within 60s (double-tap storm).
     for (let i = 0; i < 3; i++) {
-      const k = `fresh-${randomUUID()}`;
+      const k = randomUUID();
       usedClientIds.push(k);
       await recordCustomerTxn(user.id, {
         customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: k,
@@ -61,7 +61,7 @@ async function main() {
     // later with a fresh key (the 1950 burst was 5.5/6 min apart) must still
     // resolve to the original row, thanks to the 6h horizon.
     await new Promise((r) => setTimeout(r, 75_000));
-    const lateKey = `late-${randomUUID()}`;
+    const lateKey = randomUUID();
     usedClientIds.push(lateKey);
     await recordCustomerTxn(user.id, {
       customerId, type: "DEBT", amount: 200, note: "smoke-burst", clientId: lateKey,
@@ -90,7 +90,7 @@ async function main() {
     // was deliberately deleted (manual delete / dedupe purge / clear account)
     // is tombstoned. A stale offline replay carrying the SAME key later must
     // NOT create a fresh copy of the removed row.
-    const tombKey = `tomb-${randomUUID()}`;
+    const tombKey = randomUUID();
     usedClientIds.push(tombKey);
     const fr = await recordCustomerTxn(user.id, {
       customerId, type: "DEBT", amount: 77, note: "smoke-tombstone", clientId: tombKey,
@@ -115,7 +115,7 @@ async function main() {
     // G — daily guard cron: purgeDuplicateTxns scans ALL customers and deletes
     // retry-duplicates (the same work /api/cron/duplicate-guard runs nightly).
     // Seeded with raw rows that bypass the app guards to emulate dupes.
-    const cronKeys = [0, 1, 2].map(() => `cron-${randomUUID()}`);
+    const cronKeys = [0, 1, 2].map(() => randomUUID());
     usedClientIds.push(...cronKeys);
     await db.customerTransaction.createMany({
       data: cronKeys.map((key, i) => ({
@@ -133,6 +133,30 @@ async function main() {
     // Rebuilt ledger = every remaining row for this customer (A 100 + B 200 + C 55 + G 88).
     check("ledger rebuilt after purge", cronCust?.balance.toString() === "443", `balance=${cronCust?.balance}`);
     check("purged keys are sealed", cronSealed === 2, `sealed=${cronSealed}`);
+
+    // H — resurrection sweep (the live CUS-0004 hole): a row that already
+    // exists while its key is tombstoned means a write-time guard was
+    // bypassed. The nightly scan must remove it REGARDLESS of the 6h window —
+    // the key itself proves it is a copy of a deliberately removed operation.
+    const resKey = randomUUID();
+    usedClientIds.push(resKey);
+    await db.deletedKey.upsert({
+      where: { clientId: resKey },
+      create: { clientId: resKey, reason: "smoke-seal" },
+      update: {},
+    });
+    await db.customerTransaction.createMany({
+      data: [{
+        customerId, type: "DEBT" as const, amount: 99, note: "smoke-resurrect", userId: user.id,
+        balanceAfter: "999", clientId: resKey, createdAt: new Date(),
+      }],
+    });
+    const resResult = await purgeDuplicateTxns();
+    const resLeft = await db.customerTransaction.count({ where: { customerId, amount: 99, note: "smoke-resurrect" } });
+    check("nightly scan purges a row whose key is tombstoned", resLeft === 0, `left=${resLeft}`);
+    check("resurrection purge counted in the result", resResult.purged >= 1, `purged=${resResult.purged}`);
+    const resCust = await db.customer.findUnique({ where: { id: customerId }, select: { balance: true } });
+    check("ledger rebuilt after resurrection purge", resCust?.balance.toString() === "443", `balance=${resCust?.balance}`);
 
     // E — تصفية الحساب: clear account deletes ALL txns and zeroes the balance.
     const clear = await clearCustomerAccount(user.id, customerId);

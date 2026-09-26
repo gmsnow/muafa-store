@@ -6,6 +6,8 @@ import { AppError } from "@/shared/core/api-response";
 import { notify } from "@/features/notifications/service";
 import { D, money } from "@/shared/core/money";
 import { withIdTiebreak } from "@/shared/core/orderby";
+import { assertValidClientId } from "@/shared/core/clientid";
+import { ledgerDelta } from "./ledger";
 import { TXN_IMAGE_BUCKET, uploadObject, removeObjects, downloadObject } from "@/shared/supabase-storage";
 import {
   decodeImageData as decodeTxnImage,
@@ -396,6 +398,7 @@ async function tombstoneDeletedKeys(
 ) {
   const keys = [...new Set(rows.map((r) => r.clientId).filter((k): k is string => !!k))];
   for (const key of keys) {
+    assertValidClientId(key);
     await tx.deletedKey.upsert({
       where: { clientId: key },
       create: { clientId: key, reason },
@@ -434,7 +437,7 @@ export async function deleteCustomerTxnsByMonth(
       let balance = D(0);
       for (const s of sums) {
         const amt = D(s._sum.amount ?? 0);
-        balance = balance.plus(s.type === "PAYMENT" ? amt.negated() : amt);
+        balance = balance.plus(ledgerDelta(s.type, amt));
       }
       await tx.customer.update({ where: { id: customerId }, data: { balance: balance.toString() } });
     }
@@ -462,8 +465,7 @@ async function recomputeCustomerLedger(tx: Prisma.TransactionClient, customerId:
   });
   let bal = D(0);
   for (const t of txns) {
-    const amt = D(t.amount);
-    bal = bal.plus(t.type === "PAYMENT" ? amt.negated() : amt);
+    bal = bal.plus(ledgerDelta(t.type, t.amount));
     if (!bal.eq(D(t.balanceAfter))) {
       await tx.customerTransaction.update({
         where: { id: t.id },

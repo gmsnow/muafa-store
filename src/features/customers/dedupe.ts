@@ -70,22 +70,25 @@ export async function purgeDuplicateTxns(
   const toDelete = txns.filter((t) => doomed.has(t.id));
   const affected = [...new Set(doomed.values())];
 
+  // Legacy rows may carry a malformed (non-UUID) key; it is not a usable seal
+  // but must not abort the nightly rebuild. Skip + log.
+  const validKeys = [...new Set(toDelete.map((t) => t.clientId).filter((k): k is string => !!k))].filter((key) => {
+    if (isValidClientId(key)) return true;
+    logger.warn("skip_malformed_client_id", { reason: "cron-dupe-purge", key });
+    return false;
+  });
+
   await db.$transaction(async (tx) => {
-    for (const t of toDelete) {
-      await tx.customerTransaction.delete({ where: { id: t.id } });
-      if (t.clientId) {
-        // Legacy rows may carry a malformed (non-UUID) key; it is not a usable
-        // seal but must not abort the nightly rebuild. Skip + log.
-        if (isValidClientId(t.clientId)) {
-          await tx.deletedKey.upsert({
-            where: { clientId: t.clientId },
-            create: { clientId: t.clientId, reason: "cron-dupe-purge" },
-            update: {},
-          });
-        } else {
-          logger.warn("skip_malformed_client_id", { reason: "cron-dupe-purge", key: t.clientId });
-        }
-      }
+    // Bulk delete + bulk seal: the old per-row `delete`/`upsert` loop ran one
+    // round-trip per duplicate and blew the interactive-transaction timeout on
+    // large ledgers (same class of bug as clearCustomerAccount).
+    await tx.customerTransaction.deleteMany({ where: { id: { in: toDelete.map((t) => t.id) } } });
+    const CHUNK = 1000;
+    for (let i = 0; i < validKeys.length; i += CHUNK) {
+      await tx.deletedKey.createMany({
+        data: validKeys.slice(i, i + CHUNK).map((clientId) => ({ clientId, reason: "cron-dupe-purge" })),
+        skipDuplicates: true,
+      });
     }
 
     // Rebuild every affected ledger the same way deleteCustomerTxn does.
@@ -107,7 +110,7 @@ export async function purgeDuplicateTxns(
       }
       await tx.customer.update({ where: { id: customerId }, data: { balance: balance.toString() } });
     }
-  });
+  }, { timeout: 20000 });
 
   return { scanned: txns.length, purged: toDelete.length, affectedCustomers: affected };
 }

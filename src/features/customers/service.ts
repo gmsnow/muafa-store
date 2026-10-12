@@ -398,20 +398,27 @@ async function tombstoneDeletedKeys(
   reason: string,
 ) {
   const keys = [...new Set(rows.map((r) => r.clientId).filter((k): k is string => !!k))];
-  for (const key of keys) {
-    // Legacy rows can carry a malformed (non-UUID) idempotency key. Such a key
-    // can never be produced again by a current client, so it is not a usable
-    // seal — but it must never block a delete. Skip + log instead of throwing,
-    // which used to abort the whole transaction and surface as the generic
-    // "Unexpected error occurred" on تصفية الحساب / delete / month-purge.
-    if (!isValidClientId(key)) {
-      logger.warn("skip_malformed_client_id", { reason, key });
-      continue;
-    }
-    await tx.deletedKey.upsert({
-      where: { clientId: key },
-      create: { clientId: key, reason },
-      update: {},
+  // Legacy rows can carry a malformed (non-UUID) idempotency key. Such a key
+  // can never be produced again by a current client, so it is not a usable
+  // seal — but it must never block a delete. Skip + log instead of throwing,
+  // which used to abort the whole transaction and surface as the generic
+  // "Unexpected error occurred" on تصفية الحساب / delete / month-purge.
+  const valid = keys.filter((key) => {
+    if (isValidClientId(key)) return true;
+    logger.warn("skip_malformed_client_id", { reason, key });
+    return false;
+  });
+  // One bulk insert instead of a round-trip per key. A heavy account can carry
+  // thousands of ledger rows; the old per-key `upsert` loop ran thousands of
+  // sequential queries inside the interactive transaction and blew its 5s
+  // timeout (P2028), which also surfaced as "Unexpected error occurred" even
+  // after the malformed-key throw was fixed. `skipDuplicates` keeps the
+  // "seal once" semantics of the old upsert.
+  const CHUNK = 1000;
+  for (let i = 0; i < valid.length; i += CHUNK) {
+    await tx.deletedKey.createMany({
+      data: valid.slice(i, i + CHUNK).map((clientId) => ({ clientId, reason })),
+      skipDuplicates: true,
     });
   }
 }
@@ -458,7 +465,7 @@ export async function deleteCustomerTxnsByMonth(
       }),
     );
     return { deleted: deleted.count };
-  });
+  }, { timeout: 20000 });
 }
 
 /**
@@ -566,12 +573,13 @@ export async function clearCustomerAccount(userId: string, customerId: string) {
       }),
     );
     return { deleted: count, images: rows.map((r) => r.imagePath).filter((p): p is string => !!p) };
-  });
+  }, { timeout: 20000 });
 
   if (result.images.length > 0) {
     try {
       await removeObjects(TXN_IMAGE_BUCKET, result.images);
-    } catch {
+    } catch (err) {
+      logger.warn("clear_account_images_remove_failed", { customerId, count: result.images.length, err });
       // Best effort — a stale object is harmless and swept by the dedupe tool.
     }
   }

@@ -20,7 +20,7 @@ import {
   customerSchema, customerGroupSchema, customerTxnSchema,
 } from "./schema";
 import type { CustomerTxnInput } from "./schema";
-import type { Prisma, CustomerTransactionType } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient, CustomerTransactionType } from "@/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
 // Customers
@@ -393,7 +393,7 @@ export async function listLatestCustomerTransactions(opts: {
  * resurrected (see the DELETED_KEY guard in recordCustomerTxn).
  */
 async function tombstoneDeletedKeys(
-  tx: Prisma.TransactionClient,
+  client: Prisma.TransactionClient | PrismaClient,
   rows: { clientId: string | null }[],
   reason: string,
 ) {
@@ -416,7 +416,7 @@ async function tombstoneDeletedKeys(
   // "seal once" semantics of the old upsert.
   const CHUNK = 1000;
   for (let i = 0; i < valid.length; i += CHUNK) {
-    await tx.deletedKey.createMany({
+    await client.deletedKey.createMany({
       data: valid.slice(i, i + CHUNK).map((clientId) => ({ clientId, reason })),
       skipDuplicates: true,
     });
@@ -563,7 +563,6 @@ export async function clearCustomerAccount(userId: string, customerId: string) {
       select: { imagePath: true, clientId: true },
     });
     const { count } = await tx.customerTransaction.deleteMany({ where: { customerId } });
-    await tombstoneDeletedKeys(tx, rows, "account-clear");
     await tx.customer.update({ where: { id: customerId }, data: { balance: "0" } });
     await import("@/shared/core/audit").then(({ recordAudit }) =>
       recordAudit(tx, {
@@ -572,14 +571,27 @@ export async function clearCustomerAccount(userId: string, customerId: string) {
         newValues: { deleted: count },
       }),
     );
-    return { deleted: count, images: rows.map((r) => r.imagePath).filter((p): p is string => !!p) };
+    return { deleted: count, rows };
   }, { timeout: 20000 });
 
-  if (result.images.length > 0) {
+  // Seal the removed idempotency keys AFTER the delete+zero has committed, as a
+  // separate best-effort step. The seal is only a safety net against stale
+  // offline replays; running it outside the transaction guarantees a seal
+  // failure can never roll back (or block) the account clear for any customer
+  // — a failed statement inside the transaction poisons it and aborts the whole
+  // clear, which is what surfaced as "Unexpected error occurred".
+  try {
+    await tombstoneDeletedKeys(db, result.rows, "account-clear");
+  } catch (err) {
+    logger.error("clear_account_seal_failed", { customerId, err });
+  }
+
+  const images = result.rows.map((r) => r.imagePath).filter((p): p is string => !!p);
+  if (images.length > 0) {
     try {
-      await removeObjects(TXN_IMAGE_BUCKET, result.images);
+      await removeObjects(TXN_IMAGE_BUCKET, images);
     } catch (err) {
-      logger.warn("clear_account_images_remove_failed", { customerId, count: result.images.length, err });
+      logger.warn("clear_account_images_remove_failed", { customerId, count: images.length, err });
       // Best effort — a stale object is harmless and swept by the dedupe tool.
     }
   }

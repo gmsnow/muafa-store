@@ -202,6 +202,14 @@ const ar = {
     balanceFrozenOk: "تم تجميد الرصيد",
     balanceUnfrozenOk: "تم إلغاء تجميد الرصيد",
     frozenAccountsTitle: "الحسابات المجمّدة",
+    stats: {
+      total: "إجمالي العملاء", active: "عملاء نشطون", frozen: "حسابات مجمّدة",
+      receivable: "إجمالي المديونية", withDebt: "عملاء مدينون", frozenReceivable: "مديونية مجمّدة",
+      newThisMonth: "جدد هذا الشهر",
+      txns: "إجمالي الحركات", totalDebt: "إجمالي الديون", totalPayments: "إجمالي المدفوعات",
+      net: "صافي الحركة", currentBalance: "الرصيد الحالي", creditLimitHint: "حد الائتمان",
+      allTime: "الإجمالي", thisMonth: "هذا الشهر",
+    },
   },
   notif: {
     lowStock: "مخزون منخفض", outOfStock: "نفاد المخزون",

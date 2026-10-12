@@ -1,18 +1,20 @@
 ﻿import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { firstParam, Pagination, clampPage } from "@/components/pagination";
 import { getT } from "@/shared/i18n";
-import { formatDateTime, formatMoney } from "@/shared/core/format";
+import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
 import {
-  listCustomers,
+  listCustomerOptions,
   listCustomerTransactions,
   listLatestCustomerTransactions,
   getCustomerById,
+  getCustomerTxnStats,
 } from "@/features/customers/service";
+import { StatCard } from "@/features/customers/ui/stat-card";
 import { deleteCustomerTxnsMonthAction } from "@/features/customers/actions";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { Button } from "@/components/ui/button";
@@ -33,14 +35,16 @@ export default async function CustomerTransactionsPage({
   const monthParam = firstParam(sp.month)?.trim() || "";
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : undefined;
 
-  const [customer, data, customers] = await Promise.all([
+  const [customer, data, customers, txnStats] = await Promise.all([
     customerId ? getCustomerById(customerId) : null,
     customerId
       ? listCustomerTransactions({ customerId, q, month, page })
       : listLatestCustomerTransactions({ q, month, page }),
-    listCustomers({ pageSize: 500 }),
+    listCustomerOptions(),
+    getCustomerTxnStats({ customerId: customerId ?? undefined, month }),
   ]);
   const { rows, total } = data;
+  const periodHint = month ?? t.customers.stats.allTime;
 
   const monthQs = month ? `&month=${month}` : "";
   const backHref = `/customers/transactions?1=1${q ? `&q=${encodeURIComponent(q)}` : ""}${monthQs}`;
@@ -95,7 +99,7 @@ export default async function CustomerTransactionsPage({
             <CustomerLauncher
               mode="payment"
               tCommon={t.common} tErrors={t.errors} tCustomers={t.customers}
-              customers={customers.rows.map((c) => ({
+              customers={customers.map((c) => ({
                 id: c.id, name: c.name, nameAr: c.nameAr, balance: String(c.balance),
               }))}
               label={t.customers.addPayment} editId={null}
@@ -113,6 +117,48 @@ export default async function CustomerTransactionsPage({
           </Badge>
         </div>
       )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {customer && (
+          <StatCard
+            title={t.customers.stats.currentBalance}
+            value={formatMoney(D(customer.balance).toNumber(), locale)}
+            hint={D(customer.creditLimit).gt(0) ? `${t.customers.stats.creditLimitHint}: ${formatMoney(D(customer.creditLimit).toNumber(), locale)}` : undefined}
+            icon={Wallet}
+            tone={D(customer.balance).gt(0) ? "danger" : "success"}
+          />
+        )}
+        <StatCard
+          title={t.customers.stats.totalDebt}
+          value={formatMoney(D(txnStats.debt).toNumber(), locale)}
+          hint={periodHint}
+          icon={TrendingUp}
+          tone="danger"
+        />
+        <StatCard
+          title={t.customers.stats.totalPayments}
+          value={formatMoney(D(txnStats.payment).toNumber(), locale)}
+          hint={periodHint}
+          icon={TrendingDown}
+          tone="success"
+        />
+        {!customer && (
+          <StatCard
+            title={t.customers.stats.net}
+            value={formatMoney(D(txnStats.net).toNumber(), locale)}
+            hint={periodHint}
+            icon={Wallet}
+            tone="warning"
+          />
+        )}
+        <StatCard
+          title={t.customers.stats.txns}
+          value={formatNumber(txnStats.count, locale)}
+          hint={periodHint}
+          icon={Receipt}
+          tone="info"
+        />
+      </div>
 
       <Card>
         <CardContent className="px-0 pb-0">

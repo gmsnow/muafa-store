@@ -1,12 +1,14 @@
+import { Snowflake, UserCheck, UsersRound, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { firstParam, Pagination, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
-import { formatDateTime, formatMoney } from "@/shared/core/format";
+import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
-import { listCustomers } from "@/features/customers/service";
+import { listCustomers, getCustomerStats } from "@/features/customers/service";
+import { StatCard } from "@/features/customers/ui/stat-card";
 import { deleteCustomerAction, setCustomerBalanceFrozenAction } from "@/features/customers/actions";
 import { DeleteButton } from "@/features/inventory/ui/delete-button";
 import { StatementPeriodLink } from "./statement-period-link";
@@ -22,7 +24,10 @@ export default async function CustomersPage({
   const page = clampPage(firstParam(sp.page));
   const q = firstParam(sp.q) ?? "";
 
-  const { rows, total } = await listCustomers({ q: q || undefined, includeInactive: true, frozen: false, page });
+  const [{ rows, total }, stats] = await Promise.all([
+    listCustomers({ q: q || undefined, includeInactive: true, frozen: false, page }),
+    getCustomerStats(),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -31,6 +36,35 @@ export default async function CustomersPage({
         <CustomerLauncher
           mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
           label={t.common.create} editId={null}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          title={t.customers.stats.total}
+          value={formatNumber(stats.total, locale)}
+          hint={`${t.customers.stats.active}: ${formatNumber(stats.active, locale)}`}
+          icon={UsersRound}
+        />
+        <StatCard
+          title={t.customers.stats.withDebt}
+          value={formatNumber(stats.withDebt, locale)}
+          hint={`${t.customers.stats.newThisMonth}: ${formatNumber(stats.newThisMonth, locale)}`}
+          icon={UserCheck}
+          tone="info"
+        />
+        <StatCard
+          title={t.customers.stats.receivable}
+          value={formatMoney(D(stats.receivable).toNumber(), locale)}
+          icon={Wallet}
+          tone="warning"
+        />
+        <StatCard
+          title={t.customers.stats.frozen}
+          value={formatNumber(stats.frozen, locale)}
+          href="/customers/frozen"
+          icon={Snowflake}
+          tone="danger"
         />
       </div>
 

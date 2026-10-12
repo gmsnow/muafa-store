@@ -1,13 +1,14 @@
-import { Snowflake } from "lucide-react";
+import { Snowflake, UserCheck, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { firstParam, Pagination, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
-import { formatDateTime, formatMoney } from "@/shared/core/format";
+import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
 import { D } from "@/shared/core/money";
-import { listCustomers } from "@/features/customers/service";
+import { listCustomers, getCustomerStats } from "@/features/customers/service";
+import { StatCard } from "@/features/customers/ui/stat-card";
 import { setCustomerBalanceFrozenAction } from "@/features/customers/actions";
 import { StatementPeriodLink } from "../list/statement-period-link";
 import { CustomerLauncher } from "../list/customer-launcher";
@@ -21,7 +22,10 @@ export default async function FrozenCustomersPage({
   const page = clampPage(firstParam(sp.page));
   const q = firstParam(sp.q) ?? "";
 
-  const { rows, total } = await listCustomers({ q: q || undefined, includeInactive: true, frozen: true, page });
+  const [{ rows, total }, stats] = await Promise.all([
+    listCustomers({ q: q || undefined, includeInactive: true, frozen: true, page }),
+    getCustomerStats(),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -33,6 +37,28 @@ export default async function FrozenCustomersPage({
         <CustomerLauncher
           mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
           label={t.common.create} editId={null}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <StatCard
+          title={t.customers.stats.frozen}
+          value={formatNumber(stats.frozen, locale)}
+          icon={Snowflake}
+          tone="danger"
+        />
+        <StatCard
+          title={t.customers.stats.frozenReceivable}
+          value={formatMoney(D(stats.frozenReceivable).toNumber(), locale)}
+          icon={Wallet}
+          tone="warning"
+        />
+        <StatCard
+          title={t.customers.stats.withDebt}
+          value={formatNumber(stats.withDebt, locale)}
+          hint={`${t.customers.stats.receivable}: ${formatMoney(D(stats.receivable).toNumber(), locale)}`}
+          icon={UserCheck}
+          tone="info"
         />
       </div>
 

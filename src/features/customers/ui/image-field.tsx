@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ImagePlus, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Dictionary } from "@/shared/i18n";
 import { prepareImage, formatBytes, type PreparedImage, ImageError } from "@/shared/client/image";
 
 /**
@@ -19,7 +20,7 @@ export function TxnImageField({
   onDeleteExisting,
 }: {
   tCommon: Record<string, string>;
-  tCustomers: Record<string, string>;
+  tCustomers: Dictionary["customers"];
   existingUrl?: string | null;
   onNewImage: (image: PreparedImage | null) => void;
   onDeleteExisting: (deleteImage: boolean) => void;

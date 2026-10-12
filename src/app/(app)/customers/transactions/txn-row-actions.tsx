@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VoiceInput } from "@/components/voice-input";
+import type { Dictionary } from "@/shared/i18n";
 import {
   updateCustomerTxnAction, deleteCustomerTxnAction,
   attachCustomerTxnImageAction, deleteCustomerTxnImageAction,
@@ -29,7 +30,7 @@ type ActionError = { ok: false; error: { code: string; message?: string } };
 export interface TxnRowActionsProps {
   txn: { id: string; type: string; amount: string; note: string | null; imagePath: string | null };
   tCommon: Record<string, string>;
-  tCustomers: Record<string, string>;
+  tCustomers: Dictionary["customers"];
   tErrors: Record<string, string>;
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import Decimal from "decimal.js";
 import { db } from "@/shared/db";
 import { AppError } from "@/shared/core/api-response";
@@ -60,6 +61,52 @@ export async function listCustomers(opts: {
   ]);
   return { rows, total: count, page, pageSize };
 }
+
+/**
+ * Minimal customer list for pickers/dialogs. Unlike `listCustomers` it skips
+ * the group join and every unused column, so the payment dialog stays cheap
+ * on a page that does not otherwise need the customer table.
+ */
+export async function listCustomerOptions(take = 500) {
+  return db.customer.findMany({
+    where: { deletedAt: null, isActive: true },
+    select: { id: true, name: true, nameAr: true, balance: true },
+    orderBy: { name: "asc" },
+    take,
+  });
+}
+
+/**
+ * Aggregate customer KPIs for the header cards. Every query is a single
+ * COUNT/SUM aggregate (no row loading); `cache` collapses repeat calls within
+ * one render, so a page can request the whole set without extra round-trips.
+ */
+export const getCustomerStats = cache(async () => {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const notDeleted: Prisma.CustomerWhereInput = { deletedAt: null };
+
+  const [total, active, frozen, debt, withDebt, frozenDebt, newThisMonth] = await Promise.all([
+    db.customer.count({ where: notDeleted }),
+    db.customer.count({ where: { ...notDeleted, isActive: true } }),
+    db.customer.count({ where: { ...notDeleted, balanceFrozen: true } }),
+    db.customer.aggregate({ _sum: { balance: true }, where: { ...notDeleted, balance: { gt: 0 } } }),
+    db.customer.count({ where: { ...notDeleted, balance: { gt: 0 } } }),
+    db.customer.aggregate({ _sum: { balance: true }, where: { ...notDeleted, balanceFrozen: true, balance: { gt: 0 } } }),
+    db.customer.count({ where: { ...notDeleted, createdAt: { gte: monthStart } } }),
+  ]);
+
+  return {
+    total,
+    active,
+    frozen,
+    withDebt,
+    newThisMonth,
+    receivable: D(debt._sum.balance ?? 0).toString(),
+    frozenReceivable: D(frozenDebt._sum.balance ?? 0).toString(),
+  };
+});
 
 export async function getCustomerForEdit(id: string) {
   const c = await db.customer.findFirst({
@@ -388,6 +435,40 @@ export async function listLatestCustomerTransactions(opts: {
 }
 
 /**
+ * Ledger totals for the transactions page cards — one grouped aggregate over
+ * the active filter (customer and/or month). `net` follows `ledgerDelta`:
+ * DEBT/ADJUSTMENT raise the balance, PAYMENT/REFUND lower it.
+ */
+export async function getCustomerTxnStats(opts: { customerId?: string; month?: string }) {
+  const where: Prisma.CustomerTransactionWhereInput = {
+    ...(opts.customerId ? { customerId: opts.customerId } : {}),
+    ...monthRange(opts.month),
+  };
+  const grouped = await db.customerTransaction.groupBy({
+    by: ["type"],
+    where,
+    _sum: { amount: true },
+    _count: { _all: true },
+  });
+
+  let debt = D(0);
+  let payment = D(0);
+  let count = 0;
+  for (const g of grouped) {
+    count += g._count._all;
+    const amt = D(g._sum.amount ?? 0);
+    if (g.type === "PAYMENT" || g.type === "REFUND") payment = payment.plus(amt.abs());
+    else debt = debt.plus(amt.abs());
+  }
+  return {
+    count,
+    debt: debt.toString(),
+    payment: payment.toString(),
+    net: debt.minus(payment).toString(),
+  };
+}
+
+/**
  * Seal the idempotency keys of rows being removed so a stale offline replay
  * carrying one of those keys is recognized as the deleted operation and never
  * resurrected (see the DELETED_KEY guard in recordCustomerTxn).
@@ -656,7 +737,7 @@ export async function getCustomerTxnImage(txnId: string) {
 
 export async function getCustomerById(id: string) {
   return db.customer.findFirst({    where: { id, deletedAt: null },
-    select: { id: true, code: true, name: true, nameAr: true, balance: true },
+    select: { id: true, code: true, name: true, nameAr: true, balance: true, creditLimit: true },
   });
 }
 

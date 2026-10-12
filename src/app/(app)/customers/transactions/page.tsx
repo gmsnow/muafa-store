@@ -5,12 +5,16 @@ import { Button } from "@/components/ui/button";
 import { firstParam, clampPage } from "@/components/pagination";
 import { getT } from "@/shared/i18n";
 import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
-import { SafeSection } from "@/components/ui/safe-section";
+import { SafeSection, PageSafe } from "@/components/ui/safe-section";
 import { TransactionsStats } from "./stats-cards";
 import { TransactionsTable } from "./transactions-table";
 import { PaymentLauncher } from "./payment-launcher";
 
-export default async function CustomerTransactionsPage({
+export default function CustomerTransactionsPage(props: PageProps<"/customers/transactions">) {
+  return <PageSafe name="customers.transactions.page" run={() => CustomerTransactionsPageBody(props)} />;
+}
+
+async function CustomerTransactionsPageBody({
   searchParams,
 }: PageProps<"/customers/transactions">) {
   const { t } = await getT();

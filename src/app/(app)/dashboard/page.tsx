@@ -9,9 +9,15 @@ import {
   KpiGrid, ChartsSection, TopProductsSection, StockPanelsSection,
 } from "@/features/dashboard/ui/dashboard-sections";
 
+import { PageSafe } from "@/components/ui/safe-section";
+
 const RANGES: ChartRange[] = ["today", "week", "month", "year"];
 
-export default async function DashboardPage({
+export default function DashboardPage(props: PageProps<"/dashboard">) {
+  return <PageSafe name="dashboard.page" run={() => DashboardPageBody(props)} />;
+}
+
+async function DashboardPageBody({
   searchParams,
 }: PageProps<"/dashboard">) {
   const { t } = await getT();

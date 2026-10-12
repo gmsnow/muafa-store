@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { sanitizeMessage } from "@/components/ui/safe-section";
 
 /**
  * Segment-level boundary: a thrown server component inside (app) lands here
@@ -23,6 +24,11 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
         <p className="mt-2 text-sm text-muted-foreground">
           تعذّر تحميل الصفحة. حاول مرة أخرى أو عد للوحة التحكم.
         </p>
+        {error.message && (
+          <p dir="ltr" className="mt-3 break-all rounded-md bg-muted/50 p-2 text-start font-mono text-xs text-muted-foreground/80">
+            {sanitizeMessage(error.message)}
+          </p>
+        )}
         {error.digest && <p className="mt-2 text-xs text-muted-foreground/60">digest: {error.digest}</p>}
         <div className="mt-5 flex items-center justify-center gap-2">
           <Button onClick={reset}>

@@ -5,12 +5,16 @@ import { firstParam, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
 import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
-import { SafeSection } from "@/components/ui/safe-section";
+import { SafeSection, PageSafe } from "@/components/ui/safe-section";
 import { CustomerLauncher } from "../list/customer-launcher";
 import { FrozenListStats } from "./stats-cards";
 import { FrozenTable } from "./customers-table";
 
-export default async function FrozenCustomersPage({
+export default function FrozenCustomersPage(props: PageProps<"/customers/frozen">) {
+  return <PageSafe name="customers.frozen.page" run={() => FrozenCustomersPageBody(props)} />;
+}
+
+async function FrozenCustomersPageBody({
   searchParams,
 }: PageProps<"/customers/frozen">) {
   const { t } = await getT();

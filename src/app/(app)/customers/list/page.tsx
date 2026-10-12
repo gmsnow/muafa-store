@@ -4,12 +4,16 @@ import { firstParam, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
 import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
-import { SafeSection } from "@/components/ui/safe-section";
+import { SafeSection, PageSafe } from "@/components/ui/safe-section";
 import { CustomerLauncher } from "./customer-launcher";
 import { CustomerListStats } from "./stats-cards";
 import { CustomersTable } from "./customers-table";
 
-export default async function CustomersPage({
+export default function CustomersPage(props: PageProps<"/customers/list">) {
+  return <PageSafe name="customers.list.page" run={() => CustomersPageBody(props)} />;
+}
+
+async function CustomersPageBody({
   searchParams,
 }: PageProps<"/customers/list">) {
   const { t } = await getT();

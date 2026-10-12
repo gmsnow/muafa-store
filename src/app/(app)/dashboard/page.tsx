@@ -65,14 +65,14 @@ export default async function DashboardPage({
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard title={t.dashboard.todaysSales} value={formatMoney(kpis.todaySales, locale)} icon={TrendingUp} trendPercent={salesTrend} trendLabel={t.dashboard.vsYesterday} tone="success" />
-        <StatCard title={t.dashboard.todaysProfit} value={formatMoney(kpis.todayProfit, locale)} icon={(kpis.todayProfit >= 0 ? TrendingUp : TrendingDown)} tone="default" />
-        <StatCard title={t.dashboard.todaysPurchases} value={formatMoney(kpis.todayPurchases, locale)} icon={Truck} />
-        <StatCard title={t.dashboard.todaysOrders} value={formatNumber(kpis.todayOrders, locale)} icon={ShoppingCart} />
-        <StatCard title={t.dashboard.totalProducts} value={formatNumber(kpis.totalProducts, locale)} icon={Boxes} />
-        <StatCard title={t.dashboard.lowStockProducts} value={formatNumber(kpis.lowStock, locale)} icon={AlertTriangle} tone="warning" />
-        <StatCard title={t.dashboard.outOfStock} value={formatNumber(kpis.outOfStock, locale)} icon={PackageX} tone="danger" />
-        <StatCard title={t.dashboard.totalCustomers} value={formatNumber(kpis.totalCustomers, locale)} icon={UsersRound} />
+        <StatCard title={t.dashboard.todaysSales} value={formatMoney(kpis.todaySales, locale)} icon={TrendingUp} trendPercent={salesTrend} trendLabel={t.dashboard.vsYesterday} tone="success" href="/sales/orders" />
+        <StatCard title={t.dashboard.todaysProfit} value={formatMoney(kpis.todayProfit, locale)} icon={(kpis.todayProfit >= 0 ? TrendingUp : TrendingDown)} tone="default" href="/reports/profit" />
+        <StatCard title={t.dashboard.todaysPurchases} value={formatMoney(kpis.todayPurchases, locale)} icon={Truck} href="/procurement/purchases" />
+        <StatCard title={t.dashboard.todaysOrders} value={formatNumber(kpis.todayOrders, locale)} icon={ShoppingCart} href="/sales/orders" />
+        <StatCard title={t.dashboard.totalProducts} value={formatNumber(kpis.totalProducts, locale)} icon={Boxes} href="/inventory/products" />
+        <StatCard title={t.dashboard.lowStockProducts} value={formatNumber(kpis.lowStock, locale)} icon={AlertTriangle} tone="warning" href="/inventory/stock" />
+        <StatCard title={t.dashboard.outOfStock} value={formatNumber(kpis.outOfStock, locale)} icon={PackageX} tone="danger" href="/inventory/stock" />
+        <StatCard title={t.dashboard.totalCustomers} value={formatNumber(kpis.totalCustomers, locale)} icon={UsersRound} href="/customers/list" />
       </div>
 
       {/* Charts */}

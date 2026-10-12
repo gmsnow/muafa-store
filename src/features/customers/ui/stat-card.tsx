@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -20,10 +21,12 @@ interface Props {
   icon: LucideIcon;
   tone?: StatTone;
   href?: string;
+  /** Entrance stagger in milliseconds (0 = instant). */
+  delay?: number;
 }
 
 /** Compact KPI card for the customer pages — optional `href` makes it a link. */
-export function StatCard({ title, value, hint, icon: Icon, tone = "primary", href }: Props) {
+export function StatCard({ title, value, hint, icon: Icon, tone = "primary", href, delay = 0 }: Props) {
   const t = TONES[tone];
   const body = (
     <>
@@ -39,7 +42,12 @@ export function StatCard({ title, value, hint, icon: Icon, tone = "primary", hre
           <p className="truncate text-xs font-medium text-muted-foreground">{title}</p>
           <p className="mt-1 truncate text-2xl font-bold tracking-tight tabular-nums">{value}</p>
         </div>
-        <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl ring-1", t.chip)}>
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform duration-300 group-hover/card:-rotate-6 group-hover/card:scale-110",
+            t.chip,
+          )}
+        >
           <Icon className="size-5" />
         </span>
       </div>
@@ -50,9 +58,10 @@ export function StatCard({ title, value, hint, icon: Icon, tone = "primary", hre
   return (
     <Card
       className={cn(
-        "relative p-4 transition-all duration-200",
+        "animate-enter relative p-4 transition-all duration-200",
         href && "hover:-translate-y-0.5 hover:shadow-lg hover:ring-foreground/20",
       )}
+      style={{ "--tw-enter-delay": `${delay}ms` } as CSSProperties}
     >
       {href ? (
         <Link href={href} className="block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring">

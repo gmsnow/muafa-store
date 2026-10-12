@@ -1,0 +1,46 @@
+import { Snowflake, UserCheck, UsersRound, Wallet } from "lucide-react";
+import { getT } from "@/shared/i18n";
+import { formatMoney, formatNumber } from "@/shared/core/format";
+import { D } from "@/shared/core/money";
+import { getCustomerStats } from "@/features/customers/service";
+import { StatCard } from "@/features/customers/ui/stat-card";
+
+export async function CustomerListStats() {
+  const { t, locale } = await getT();
+  const stats = await getCustomerStats();
+
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatCard
+        title={t.customers.stats.total}
+        value={formatNumber(stats.total, locale)}
+        hint={`${t.customers.stats.active}: ${formatNumber(stats.active, locale)}`}
+        icon={UsersRound}
+        delay={0}
+      />
+      <StatCard
+        title={t.customers.stats.withDebt}
+        value={formatNumber(stats.withDebt, locale)}
+        hint={`${t.customers.stats.newThisMonth}: ${formatNumber(stats.newThisMonth, locale)}`}
+        icon={UserCheck}
+        tone="info"
+        delay={70}
+      />
+      <StatCard
+        title={t.customers.stats.receivable}
+        value={formatMoney(D(stats.receivable).toNumber(), locale)}
+        icon={Wallet}
+        tone="warning"
+        delay={140}
+      />
+      <StatCard
+        title={t.customers.stats.frozen}
+        value={formatNumber(stats.frozen, locale)}
+        href="/customers/frozen"
+        icon={Snowflake}
+        tone="danger"
+        delay={210}
+      />
+    </div>
+  );
+}

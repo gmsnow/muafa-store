@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,7 @@ interface Props {
   accent?: string;
   tone?: "default" | "warning" | "danger" | "success";
   href?: string;
+  delay?: number;
 }
 
 const toneClasses = {
@@ -21,7 +23,7 @@ const toneClasses = {
   success: "text-emerald-600 bg-emerald-500/10 dark:text-emerald-400",
 } as const;
 
-export function StatCard({ title, value, icon: Icon, trendPercent, trendLabel, accent, tone = "default", href }: Props) {
+export function StatCard({ title, value, icon: Icon, trendPercent, trendLabel, accent, tone = "default", href, delay = 0 }: Props) {
   const up = (trendPercent ?? 0) >= 0;
   const body = (
     <div className="flex items-start justify-between gap-2">
@@ -29,13 +31,16 @@ export function StatCard({ title, value, icon: Icon, trendPercent, trendLabel, a
         <p className="truncate text-xs font-medium text-muted-foreground">{title}</p>
         <p className="mt-1 truncate text-xl font-bold tracking-tight">{value}</p>
       </div>
-      <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", toneClasses[tone], accent)}>
+      <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-300 group-hover/card:-rotate-6 group-hover/card:scale-110", toneClasses[tone], accent)}>
         <Icon className="size-4" />
       </div>
     </div>
   );
   return (
-    <Card className={cn("p-4 transition-all duration-200", href && "hover:-translate-y-0.5 hover:shadow-lg hover:ring-foreground/20")}>
+    <Card
+      className={cn("animate-pop p-4 transition-all duration-200", href && "hover:-translate-y-0.5 hover:shadow-lg hover:ring-foreground/20")}
+      style={{ "--tw-enter-delay": `${delay}ms` } as CSSProperties}
+    >
       {href ? (
         <Link href={href} className="block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {body}

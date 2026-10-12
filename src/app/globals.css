@@ -129,6 +129,36 @@
   }
 }
 
+/* Entrance / motion helpers. Rely on the `--tw-enter-delay` inline var for
+   stagger so server-rendered grids can sequence without any client JS. */
+@layer utilities {
+  .animate-enter {
+    animation: ent-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--tw-enter-delay, 0ms);
+  }
+  .animate-pop {
+    animation: ent-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--tw-enter-delay, 0ms);
+  }
+}
+
+@keyframes ent-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ent-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-enter,
+  .animate-pop {
+    animation: none;
+  }
+}
+
 @media print {
   @page {
     size: A4;

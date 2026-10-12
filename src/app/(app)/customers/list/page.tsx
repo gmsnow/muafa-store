@@ -1,184 +1,43 @@
-import { Snowflake, UserCheck, UsersRound, Wallet } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { firstParam, Pagination, clampPage } from "@/components/pagination";
+import { firstParam, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
-import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
-import { D } from "@/shared/core/money";
-import { listCustomers, getCustomerStats } from "@/features/customers/service";
-import { StatCard } from "@/features/customers/ui/stat-card";
-import { deleteCustomerAction, setCustomerBalanceFrozenAction } from "@/features/customers/actions";
-import { DeleteButton } from "@/features/inventory/ui/delete-button";
-import { StatementPeriodLink } from "./statement-period-link";
+import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
 import { CustomerLauncher } from "./customer-launcher";
-import { FreezeButton } from "./freeze-button";
-import { ClearAccountButton } from "../transactions/clear-account-button";
+import { CustomerListStats } from "./stats-cards";
+import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage({
   searchParams,
 }: PageProps<"/customers/list">) {
-  const { t, locale } = await getT();
+  const { t } = await getT();
   const sp = await searchParams;
   const page = clampPage(firstParam(sp.page));
   const q = firstParam(sp.q) ?? "";
 
-  const [{ rows, total }, stats] = await Promise.all([
-    listCustomers({ q: q || undefined, includeInactive: true, frozen: false, page }),
-    getCustomerStats(),
-  ]);
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">{t.customers.title}</h1>
+        <h1 className="animate-enter text-2xl font-bold tracking-tight">{t.customers.title}</h1>
         <CustomerLauncher
           mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
           label={t.common.create} editId={null}
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          title={t.customers.stats.total}
-          value={formatNumber(stats.total, locale)}
-          hint={`${t.customers.stats.active}: ${formatNumber(stats.active, locale)}`}
-          icon={UsersRound}
-        />
-        <StatCard
-          title={t.customers.stats.withDebt}
-          value={formatNumber(stats.withDebt, locale)}
-          hint={`${t.customers.stats.newThisMonth}: ${formatNumber(stats.newThisMonth, locale)}`}
-          icon={UserCheck}
-          tone="info"
-        />
-        <StatCard
-          title={t.customers.stats.receivable}
-          value={formatMoney(D(stats.receivable).toNumber(), locale)}
-          icon={Wallet}
-          tone="warning"
-        />
-        <StatCard
-          title={t.customers.stats.frozen}
-          value={formatNumber(stats.frozen, locale)}
-          href="/customers/frozen"
-          icon={Snowflake}
-          tone="danger"
-        />
-      </div>
+      <Suspense fallback={<StatsSkeleton count={4} />}>
+        <CustomerListStats />
+      </Suspense>
 
       <form className="flex flex-wrap gap-2">
         <LiveQueryInput placeholder="…" className="w-full sm:w-64" />
         <Button type="submit" variant="outline" size="sm">{t.common.filter}</Button>
       </form>
 
-      <Card>
-        <CardContent className="px-0 pb-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t.customers.code}</TableHead>
-                <TableHead>{t.customers.title}</TableHead>
-                <TableHead>{t.customers.phone}</TableHead>
-                <TableHead className="text-end">{t.customers.creditLimit}</TableHead>
-                <TableHead className="text-end">{t.customers.balance}</TableHead>
-                <TableHead>{t.customers.lastPurchase}</TableHead>
-                <TableHead className="text-end">{t.common.actions}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-mono text-xs" dir="ltr">{c.code}</TableCell>
-                  <TableCell className="text-sm font-medium">
-                    <span className="inline-flex items-center gap-1.5">
-                      {c.nameAr || c.name}
-                      {c.balanceFrozen && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-                          {t.customers.balanceFrozen}
-                        </span>
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm" dir="ltr">{c.phone ?? "—"}</TableCell>
-                  <TableCell className="text-end tabular-nums" dir="ltr">{formatMoney(D(c.creditLimit).toNumber(), locale)}</TableCell>
-                  <TableCell className={`text-end tabular-nums ${D(c.balance).gt(0) ? "text-destructive font-medium" : ""}`} dir="ltr">
-                    {formatMoney(D(c.balance).toNumber(), locale)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {c.lastPurchaseAt ? formatDateTime(c.lastPurchaseAt, locale) : "—"}
-                  </TableCell>
-                  <TableCell className="text-end">
-                    <div className="flex items-center justify-end gap-1">
-                      <StatementPeriodLink
-                        customerId={c.id}
-                        labels={{
-                          trigger: t.customers.statement,
-                          title: t.customers.choosePeriod,
-                          day: t.customers.day,
-                          week: t.customers.week,
-                          month: t.customers.month,
-                          view: t.customers.view,
-                        }}
-                      />
-                      <CustomerLauncher
-                        mode="form" tCommon={t.common} tErrors={t.errors} tCustomers={t.customers} tProcurement={t.procurement}
-                        label={t.common.edit} editId={c.id}
-                      />
-                      <FreezeButton
-                        action={setCustomerBalanceFrozenAction}
-                        id={c.id}
-                        frozen={c.balanceFrozen}
-                        labels={{
-                          freeze: t.customers.freezeBalance,
-                          unfreeze: t.customers.unfreezeBalance,
-                          freezeConfirm: t.customers.freezeConfirm,
-                          unfreezeConfirm: t.customers.unfreezeConfirm,
-                          freezeOk: t.customers.balanceFrozenOk,
-                          unfreezeOk: t.customers.balanceUnfrozenOk,
-                          cancel: t.common.cancel,
-                          confirm: t.common.confirm,
-                        }}
-                      />
-                      <DeleteButton
-                        action={deleteCustomerAction}
-                        id={c.id}
-                        title={t.customers.customerDeleted}
-                        description={t.customers.deleteConfirm}
-                        confirmLabel={t.common.delete}
-                        cancelLabel={t.common.cancel}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                            {t.common.delete}
-                          </Button>
-                        }
-                      />
-                      <ClearAccountButton
-                        customerId={c.id}
-                        labels={{
-                          title: t.customers.clearAccount, confirm: t.customers.clearAccountConfirm,
-                          success: t.customers.accountCleared, cancel: t.common.cancel,
-                        }}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {rows.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-          <div className="px-4">
-            <Pagination
-              page={page} pageSize={25} total={total}
-              baseParams={{ q }}
-              labels={{ previous: t.common.previous, next: t.common.next, page: t.common.page, of: t.common.of }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <Suspense fallback={<TableSkeleton rows={8} cols={7} />}>
+        <CustomersTable q={q || undefined} page={page} />
+      </Suspense>
     </div>
   );
 }

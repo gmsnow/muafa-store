@@ -1,33 +1,18 @@
-﻿import Link from "next/link";
-import { ArrowRight, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { firstParam, Pagination, clampPage } from "@/components/pagination";
-import { getT } from "@/shared/i18n";
-import { formatDateTime, formatMoney, formatNumber } from "@/shared/core/format";
-import { D } from "@/shared/core/money";
-import {
-  listCustomerOptions,
-  listCustomerTransactions,
-  listLatestCustomerTransactions,
-  getCustomerById,
-  getCustomerTxnStats,
-} from "@/features/customers/service";
-import { StatCard } from "@/features/customers/ui/stat-card";
-import { deleteCustomerTxnsMonthAction } from "@/features/customers/actions";
-import { LiveQueryInput } from "@/components/live-query-input";
+﻿import { Suspense } from "react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DeleteMonthButton } from "./delete-month-button";
-import { ClearAccountButton } from "./clear-account-button";
-import { TxnRowActions } from "./txn-row-actions";
-import { CustomerLauncher } from "../list/customer-launcher";
-import { TxnImage } from "@/features/customers/ui/image-view";
+import { firstParam, clampPage } from "@/components/pagination";
+import { getT } from "@/shared/i18n";
+import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
+import { TransactionsStats } from "./stats-cards";
+import { TransactionsTable } from "./transactions-table";
+import { PaymentLauncher } from "./payment-launcher";
 
 export default async function CustomerTransactionsPage({
   searchParams,
 }: PageProps<"/customers/transactions">) {
-  const { t, locale } = await getT();
+  const { t } = await getT();
   const sp = await searchParams;
   const page = clampPage(firstParam(sp.page));
   const q = firstParam(sp.q)?.trim() || undefined;
@@ -35,21 +20,7 @@ export default async function CustomerTransactionsPage({
   const monthParam = firstParam(sp.month)?.trim() || "";
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : undefined;
 
-  const [customer, data, customers, txnStats] = await Promise.all([
-    customerId ? getCustomerById(customerId) : null,
-    customerId
-      ? listCustomerTransactions({ customerId, q, month, page })
-      : listLatestCustomerTransactions({ q, month, page }),
-    listCustomerOptions(),
-    getCustomerTxnStats({ customerId: customerId ?? undefined, month }),
-  ]);
-  const { rows, total } = data;
-  const periodHint = month ?? t.customers.stats.allTime;
-
-  const monthQs = month ? `&month=${month}` : "";
-  const backHref = `/customers/transactions?1=1${q ? `&q=${encodeURIComponent(q)}` : ""}${monthQs}`;
-  const drillHref = (id: string) =>
-    `/customers/transactions?customerId=${id}${q ? `&q=${encodeURIComponent(q)}` : ""}${monthQs}`;
+  const backHref = `/customers/transactions?1=1${q ? `&q=${encodeURIComponent(q)}` : ""}${month ? `&month=${month}` : ""}`;
 
   return (
     <div className="space-y-4">
@@ -64,168 +35,24 @@ export default async function CustomerTransactionsPage({
               <ArrowRight className="size-4" />
             </Link>
           )}
-          <h1 className="text-2xl font-bold tracking-tight">{t.customers.transactionsTitle}</h1>
+          <h1 className="animate-enter text-2xl font-bold tracking-tight">{t.customers.transactionsTitle}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <form className="flex flex-wrap items-center gap-2" action="/customers/transactions">
-            {customerId && <input type="hidden" name="customerId" value={customerId} />}
-            <LiveQueryInput placeholder={t.common.searchPlaceholder} className="w-full sm:w-56" />
-            <input
-              type="month" name="month" defaultValue={monthParam}
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-              aria-label={t.customers.month}
-            />
-            <Button type="submit" variant="secondary" size="sm">{t.common.filter}</Button>
-          </form>
-          {month && (
-            <DeleteMonthButton
-              action={deleteCustomerTxnsMonthAction} month={month} customerId={customerId}
-              labels={{
-                title: t.customers.deleteMonth, confirm: t.customers.deleteMonthConfirm,
-                success: t.customers.monthDeleted, cancel: t.common.cancel,
-              }}
-            />
-          )}
-          {customerId && (
-            <ClearAccountButton
-              customerId={customerId}
-              labels={{
-                title: t.customers.clearAccount, confirm: t.customers.clearAccountConfirm,
-                success: t.customers.accountCleared, cancel: t.common.cancel,
-              }}
-            />
-          )}
           {!customerId && (
-            <CustomerLauncher
-              mode="payment"
-              tCommon={t.common} tErrors={t.errors} tCustomers={t.customers}
-              customers={customers.map((c) => ({
-                id: c.id, name: c.name, nameAr: c.nameAr, balance: String(c.balance),
-              }))}
-              label={t.customers.addPayment} editId={null}
-            />
+            <Suspense fallback={<Button variant="default" size="sm" disabled>…</Button>}>
+              <PaymentLauncher />
+            </Suspense>
           )}
         </div>
       </div>
 
-      {customer && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="font-medium">{customer.nameAr || customer.name}</span>
-          <span className="font-mono text-xs text-muted-foreground" dir="ltr">{customer.code}</span>
-          <Badge variant={D(customer.balance).gt(0) ? "destructive" : "outline"}>
-            {t.customers.balance}: {formatMoney(D(customer.balance).toNumber(), locale)}
-          </Badge>
-        </div>
-      )}
+      <Suspense fallback={<StatsSkeleton count={4} />}>
+        <TransactionsStats customerId={customerId} month={month} />
+      </Suspense>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {customer && (
-          <StatCard
-            title={t.customers.stats.currentBalance}
-            value={formatMoney(D(customer.balance).toNumber(), locale)}
-            hint={D(customer.creditLimit).gt(0) ? `${t.customers.stats.creditLimitHint}: ${formatMoney(D(customer.creditLimit).toNumber(), locale)}` : undefined}
-            icon={Wallet}
-            tone={D(customer.balance).gt(0) ? "danger" : "success"}
-          />
-        )}
-        <StatCard
-          title={t.customers.stats.totalDebt}
-          value={formatMoney(D(txnStats.debt).toNumber(), locale)}
-          hint={periodHint}
-          icon={TrendingUp}
-          tone="danger"
-        />
-        <StatCard
-          title={t.customers.stats.totalPayments}
-          value={formatMoney(D(txnStats.payment).toNumber(), locale)}
-          hint={periodHint}
-          icon={TrendingDown}
-          tone="success"
-        />
-        {!customer && (
-          <StatCard
-            title={t.customers.stats.net}
-            value={formatMoney(D(txnStats.net).toNumber(), locale)}
-            hint={periodHint}
-            icon={Wallet}
-            tone="warning"
-          />
-        )}
-        <StatCard
-          title={t.customers.stats.txns}
-          value={formatNumber(txnStats.count, locale)}
-          hint={periodHint}
-          icon={Receipt}
-          tone="info"
-        />
-      </div>
-
-      <Card>
-        <CardContent className="px-0 pb-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t.common.date}</TableHead>
-                <TableHead>{t.customers.title}</TableHead>
-                <TableHead>{t.common.status}</TableHead>
-                <TableHead className="text-end">{t.customers.paymentAmount}</TableHead>
-                <TableHead className="text-end">{t.customers.balanceAfter}</TableHead>
-                <TableHead>{t.common.notes}</TableHead>
-                <TableHead className="w-20 text-end">{t.common.actions}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((tx) => (
-                <TableRow key={tx.id} className={!customerId ? "relative cursor-pointer hover:bg-muted/50" : undefined}>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {formatDateTime(tx.createdAt, locale)}
-                  </TableCell>
-                  <TableCell className="text-sm font-medium">
-                    {!customerId && (
-                      <Link href={drillHref(tx.customerId)} className="absolute inset-0 z-10">
-                        <span className="sr-only">{tx.customer.nameAr || tx.customer.name}</span>
-                      </Link>
-                    )}
-                    {tx.customer.nameAr || tx.customer.name}
-                    <span className="ms-2 font-mono text-[11px] text-muted-foreground" dir="ltr">{tx.customer.code}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={tx.type === "PAYMENT" ? "outline" : tx.type === "REFUND" ? "secondary" : "destructive"}>
-                      {tx.type === "PAYMENT" ? t.customers.payment : tx.type === "DEBT" ? t.customers.debt : tx.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-end tabular-nums" dir="ltr">{formatMoney(D(tx.amount).toNumber(), locale)}</TableCell>
-                  <TableCell className={`text-end tabular-nums ${D(tx.balanceAfter).gt(0) ? "text-destructive" : ""}`} dir="ltr">
-                    {formatMoney(D(tx.balanceAfter).toNumber(), locale)}
-                  </TableCell>
-                  <TableCell className="max-w-40 text-sm">
-                    <div className="flex min-w-0 items-center gap-1">
-                      {tx.note && <span className="min-w-0 truncate">{tx.note}</span>}
-                      {tx.imagePath && <TxnImage txnId={tx.id} label={t.customers.viewImage} />}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-end">
-                    <TxnRowActions
-                      txn={{ id: tx.id, type: tx.type, amount: String(tx.amount), note: tx.note, imagePath: tx.imagePath }}
-                      tCommon={t.common} tCustomers={t.customers} tErrors={t.errors}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {rows.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">{t.common.noData}</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-          <div className="px-4">
-            <Pagination
-              page={page} pageSize={25} total={total}
-              baseParams={{ q, month: monthParam, ...(customerId ? { customerId } : {}) }}
-              labels={{ previous: t.common.previous, next: t.common.next, page: t.common.page, of: t.common.of }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <Suspense fallback={<TableSkeleton rows={8} cols={7} />}>
+        <TransactionsTable customerId={customerId} q={q} month={month} monthParam={monthParam} page={page} />
+      </Suspense>
     </div>
   );
 }

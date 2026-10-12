@@ -43,3 +43,42 @@ export function TableSkeleton({ rows = 6, cols = 7, className }: { rows?: number
 export function PanelSkeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse rounded-xl border bg-card", className)} />;
 }
+
+/** Placeholder for the streamed app sidebar (mirrors Sidebar dimensions). */
+export function SidebarSkeleton() {
+  return (
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground md:flex">
+      <div className="flex h-14 items-center gap-2 border-b px-3">
+        <Skeleton className="size-8 rounded-lg" />
+        <Skeleton className="h-4 w-24" />
+      </div>
+      <div className="animate-pulse flex-1 space-y-5 overflow-hidden p-3">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+/** Placeholder for the streamed topbar (mirrors Topbar layout, avoids jumps). */
+export function TopbarSkeleton() {
+  return (
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3">
+      <div className="animate-pulse flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm">
+        <Skeleton className="size-9 md:hidden" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+      <div className="ms-auto flex items-center gap-1">
+        <Skeleton className="size-9" />
+        <Skeleton className="size-9" />
+        <Skeleton className="size-9" />
+        <Skeleton className="h-9 w-32" />
+      </div>
+    </header>
+  );
+}

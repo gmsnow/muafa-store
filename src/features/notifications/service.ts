@@ -153,7 +153,34 @@ async function doSyncNotifications(limit = 25) {
       });
     }
   }
+  await collapseUnreadDuplicates();
   return listNotifications(limit);
+}
+
+/**
+ * The notifications feed shows ONE unread entry per (type, entityId) — the
+ * same dedupe the condition scan uses. Operation events (customer txns, sales,
+ * receipts…) used to mint a fresh row per call, so a repeated process flooded
+ * the bell with identical entries. Collapse existing unread duplicates to the
+ * newest row (read history is untouched).
+ */
+async function collapseUnreadDuplicates() {
+  const unread = await db.notification.findMany({
+    where: { isRead: false },
+    select: { id: true, type: true, entityId: true, createdAt: true },
+  });
+  const newest = new Map<string, { id: string; at: number }>();
+  for (const n of unread) {
+    const key = `${n.type}:${n.entityId ?? ""}`;
+    const cur = newest.get(key);
+    if (!cur || n.createdAt.getTime() > cur.at) newest.set(key, { id: n.id, at: n.createdAt.getTime() });
+  }
+  const keepIds = new Set([...newest.values()].map((v) => v.id));
+  const dropIds = unread.filter((n) => !keepIds.has(n.id)).map((n) => n.id);
+  if (dropIds.length > 0) {
+    await db.notification.deleteMany({ where: { id: { in: dropIds } } });
+    logger.info("notifications_collapsed", { dropped: dropIds.length });
+  }
 }
 
 export async function listNotifications(limit = 25) {
@@ -190,6 +217,27 @@ export interface NotifyInput {
 export async function notify(input: NotifyInput) {
   syncCache = null; // bell list must include the new event on next read
   try {
+    if (input.entityId) {
+      const existing = await db.notification.findFirst({
+        where: { isRead: false, type: input.type, entityId: input.entityId },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (existing) {
+        // one unread entry per (type, entityId): refresh the newest instead of
+        // minting a flood of identical rows for repeated events on the same entity.
+        await db.notification.update({
+          where: { id: existing.id },
+          data: {
+            title: input.title,
+            body: input.body ?? null,
+            href: input.href ?? null,
+            createdAt: new Date(),
+          },
+        });
+        return;
+      }
+    }
     await db.notification.create({
       data: {
         type: input.type,

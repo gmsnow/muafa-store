@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { firstParam, clampPage } from "@/components/pagination";
 import { getT } from "@/shared/i18n";
 import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
+import { SafeSection } from "@/components/ui/safe-section";
 import { TransactionsStats } from "./stats-cards";
 import { TransactionsTable } from "./transactions-table";
 import { PaymentLauncher } from "./payment-launcher";
@@ -40,18 +41,21 @@ export default async function CustomerTransactionsPage({
         <div className="flex flex-wrap items-center gap-2">
           {!customerId && (
             <Suspense fallback={<Button variant="default" size="sm" disabled>…</Button>}>
-              <PaymentLauncher />
+              <SafeSection run={() => PaymentLauncher()} name="customers.transactions.launcher" />
             </Suspense>
           )}
         </div>
       </div>
 
       <Suspense fallback={<StatsSkeleton count={4} />}>
-        <TransactionsStats customerId={customerId} month={month} />
+        <SafeSection run={() => TransactionsStats({ customerId, month })} name="customers.transactions.stats" />
       </Suspense>
 
       <Suspense fallback={<TableSkeleton rows={8} cols={7} />}>
-        <TransactionsTable customerId={customerId} q={q} month={month} monthParam={monthParam} page={page} />
+        <SafeSection
+          run={() => TransactionsTable({ customerId, q, month, monthParam, page })}
+          name="customers.transactions.table"
+        />
       </Suspense>
     </div>
   );

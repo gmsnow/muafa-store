@@ -5,6 +5,7 @@ import { firstParam, clampPage } from "@/components/pagination";
 import { LiveQueryInput } from "@/components/live-query-input";
 import { getT } from "@/shared/i18n";
 import { StatsSkeleton, TableSkeleton } from "@/components/ui/page-skeletons";
+import { SafeSection } from "@/components/ui/safe-section";
 import { CustomerLauncher } from "../list/customer-launcher";
 import { FrozenListStats } from "./stats-cards";
 import { FrozenTable } from "./customers-table";
@@ -31,7 +32,7 @@ export default async function FrozenCustomersPage({
       </div>
 
       <Suspense fallback={<StatsSkeleton count={3} />}>
-        <FrozenListStats />
+        <SafeSection run={() => FrozenListStats()} name="customers.frozen.stats" />
       </Suspense>
 
       <form className="flex flex-wrap gap-2">
@@ -40,7 +41,7 @@ export default async function FrozenCustomersPage({
       </form>
 
       <Suspense fallback={<TableSkeleton rows={6} cols={7} />}>
-        <FrozenTable q={q || undefined} page={page} />
+        <SafeSection run={() => FrozenTable({ q: q || undefined, page })} name="customers.frozen.table" />
       </Suspense>
     </div>
   );

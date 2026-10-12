@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getT } from "@/shared/i18n";
 import { PanelSkeleton, StatsSkeleton } from "@/components/ui/page-skeletons";
+import { SafeSection } from "@/components/ui/safe-section";
 import type { ChartRange } from "@/features/dashboard/service";
 import {
   KpiGrid, ChartsSection, TopProductsSection, StockPanelsSection,
@@ -36,19 +37,19 @@ export default async function DashboardPage({
       </div>
 
       <Suspense fallback={<StatsSkeleton count={8} />}>
-        <KpiGrid />
+        <SafeSection run={() => KpiGrid()} name="dashboard.kpis" />
       </Suspense>
 
       <Suspense fallback={<div className="grid gap-4 lg:grid-cols-3"><PanelSkeleton className="h-72 lg:col-span-2" /><PanelSkeleton className="h-72" /></div>}>
-        <ChartsSection range={range} />
+        <SafeSection run={() => ChartsSection({ range })} name="dashboard.charts" />
       </Suspense>
 
       <Suspense fallback={<div className="grid gap-4 lg:grid-cols-2"><PanelSkeleton className="h-64" /><PanelSkeleton className="h-64" /></div>}>
-        <TopProductsSection />
+        <SafeSection run={() => TopProductsSection()} name="dashboard.top-products" />
       </Suspense>
 
       <Suspense fallback={<div className="grid gap-4 lg:grid-cols-2"><PanelSkeleton className="h-56" /><PanelSkeleton className="h-56" /></div>}>
-        <StockPanelsSection />
+        <SafeSection run={() => StockPanelsSection()} name="dashboard.stock" />
       </Suspense>
     </div>
   );

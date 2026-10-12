@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CloudUpload, Loader2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ export function OfflineIndicator({ t }: { t: Dictionary }) {
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Signature of the last reported failure, so an item that keeps failing
+  // doesn't re-fire the same toast on every 30s auto-sync.
+  const lastErrorRef = useRef("");
 
   const sync = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -22,7 +25,11 @@ export function OfflineIndicator({ t }: { t: Dictionary }) {
     const r = await flushOutbox();
     setBusy(false);
     if (r.synced > 0) toast.success(t.common.syncDone.replace("{count}", String(r.synced)));
-    else if (r.failed > 0) toast.error(t.common.syncFailed);
+    const sig = `${r.dropped}|${r.failed}`;
+    if ((r.dropped > 0 || r.failed > 0) && sig !== lastErrorRef.current) {
+      toast.error(r.dropped > 0 ? t.common.syncRejected : t.common.syncFailed);
+    }
+    lastErrorRef.current = sig;
   }, [t]);
 
   useEffect(() => {

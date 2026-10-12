@@ -6,7 +6,8 @@ import { AppError } from "@/shared/core/api-response";
 import { notify } from "@/features/notifications/service";
 import { D, money } from "@/shared/core/money";
 import { withIdTiebreak } from "@/shared/core/orderby";
-import { assertValidClientId } from "@/shared/core/clientid";
+import { isValidClientId } from "@/shared/core/clientid";
+import { logger } from "@/shared/core/logger";
 import { ledgerDelta } from "./ledger";
 import { TXN_IMAGE_BUCKET, uploadObject, removeObjects, downloadObject } from "@/shared/supabase-storage";
 import {
@@ -398,7 +399,15 @@ async function tombstoneDeletedKeys(
 ) {
   const keys = [...new Set(rows.map((r) => r.clientId).filter((k): k is string => !!k))];
   for (const key of keys) {
-    assertValidClientId(key);
+    // Legacy rows can carry a malformed (non-UUID) idempotency key. Such a key
+    // can never be produced again by a current client, so it is not a usable
+    // seal — but it must never block a delete. Skip + log instead of throwing,
+    // which used to abort the whole transaction and surface as the generic
+    // "Unexpected error occurred" on تصفية الحساب / delete / month-purge.
+    if (!isValidClientId(key)) {
+      logger.warn("skip_malformed_client_id", { reason, key });
+      continue;
+    }
     await tx.deletedKey.upsert({
       where: { clientId: key },
       create: { clientId: key, reason },

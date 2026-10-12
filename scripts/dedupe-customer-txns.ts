@@ -24,7 +24,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { db } from "../src/shared/db";
 import { D } from "../src/shared/core/money";
-import { assertValidClientId } from "../src/shared/core/clientid";
+import { isValidClientId } from "../src/shared/core/clientid";
 import { ledgerDelta } from "../src/features/customers/ledger";
 import type { CustomerTransaction } from "../src/generated/prisma/client";
 
@@ -127,12 +127,17 @@ async function main() {
       // that key can't resurrect it later (goes through recordCustomerTxn's
       // DELETED_KEY guard).
       if (t.clientId) {
-        assertValidClientId(t.clientId);
-        await tx.deletedKey.upsert({
-          where: { clientId: t.clientId },
-          create: { clientId: t.clientId, reason: "dedupe-purge" },
-          update: {},
-        });
+        // Legacy rows may carry a malformed (non-UUID) key; it is not a usable
+        // seal but must not abort the purge. Skip + log.
+        if (isValidClientId(t.clientId)) {
+          await tx.deletedKey.upsert({
+            where: { clientId: t.clientId },
+            create: { clientId: t.clientId, reason: "dedupe-purge" },
+            update: {},
+          });
+        } else {
+          console.warn(`skip malformed clientId "${t.clientId}" (not a full UUID)`);
+        }
       }
     }
     for (const cid of affected) {

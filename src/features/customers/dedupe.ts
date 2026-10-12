@@ -1,6 +1,7 @@
 import { db } from "@/shared/db";
 import { D } from "@/shared/core/money";
-import { assertValidClientId } from "@/shared/core/clientid";
+import { isValidClientId } from "@/shared/core/clientid";
+import { logger } from "@/shared/core/logger";
 import { ledgerDelta } from "./ledger";
 
 /**
@@ -73,12 +74,17 @@ export async function purgeDuplicateTxns(
     for (const t of toDelete) {
       await tx.customerTransaction.delete({ where: { id: t.id } });
       if (t.clientId) {
-        assertValidClientId(t.clientId);
-        await tx.deletedKey.upsert({
-          where: { clientId: t.clientId },
-          create: { clientId: t.clientId, reason: "cron-dupe-purge" },
-          update: {},
-        });
+        // Legacy rows may carry a malformed (non-UUID) key; it is not a usable
+        // seal but must not abort the nightly rebuild. Skip + log.
+        if (isValidClientId(t.clientId)) {
+          await tx.deletedKey.upsert({
+            where: { clientId: t.clientId },
+            create: { clientId: t.clientId, reason: "cron-dupe-purge" },
+            update: {},
+          });
+        } else {
+          logger.warn("skip_malformed_client_id", { reason: "cron-dupe-purge", key: t.clientId });
+        }
       }
     }
 
